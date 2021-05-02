@@ -10,7 +10,7 @@ from torchvision import transforms
 import xception_origin
 from EarlyStopping import EarlyStopping
 from Function_common import *
-from Function_FReTAL import *
+from Function_CoReD import *
 from torch.cuda.amp import autocast
 from torch.cuda.amp import GradScaler
 #MUST WRITE THE ARGUMENTS [1]~[5]
@@ -80,11 +80,10 @@ val_aug = transforms.Compose([
 ])
 open(save_path+'/{}_{}_{}.txt'.format(_name_source,name_target,name_saved_file),'a')
 
-# dicLoader,dicFReTAL = Make_DataLoader('/media/data1/sha/CLRNet',name_source,name_target,train_aug,val_aug,mode_FReTAL=True)
-dicLoader,dicFReTAL = Make_DataLoader_continual('/media/data1/sha/CLRNet_jpg25/CLRNet',name_source,name_source2,name_target,train_aug,val_aug,mode_FReTAL=True)
+dicLoader,diccored = Make_DataLoader_continual('./',name_source,name_source2,name_target,train_aug,val_aug,mode_CORED=True)
 
 teacher_model, student_model = None,None
-prev_path_weight = '/home/mhkim/T-GD_MTL/current_train_with_shadata/{}/FReTAL_NOBRIGHT'.format(_name_source)
+prev_path_weight = './{}'.format(_name_source)
 # path_weight = '/home/mhkim/T-GD/sha_faceforensics_jpeg_comp25_xception'
 # path_pretrained = os.path.join(path_weight,str(name_source))
 teacher_model = xception_origin.xception(num_classes=2, pretrained='')
@@ -107,8 +106,8 @@ criterion = nn.CrossEntropyLoss().cuda()
 optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
 scaler = GradScaler()
 
-list_correct = func_correct(teacher_model.cuda(),dicFReTAL['train_target_forCorrect'])
-correct_loaders,list_ratio_loader = GetSplitLoaders_BinaryClasses(list_correct,dicFReTAL['train_target_dataset'],train_aug, num_store_per)
+list_correct = func_correct(teacher_model.cuda(),diccored['train_target_forCorrect'])
+correct_loaders,list_ratio_loader = GetSplitLoaders_BinaryClasses(list_correct,diccored['train_target_dataset'],train_aug, num_store_per)
           
 # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
 list_features = GetListTeacherFeatureFakeReal(teacher_model,correct_loaders)

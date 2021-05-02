@@ -10,6 +10,9 @@ from PIL import Image
 from torchvision import transforms
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
+from tqdm import tqdm
+
+
 class CustumDataset(Dataset):
     def __init__(self, data, target, transform=None):
         self.data = data
@@ -102,7 +105,6 @@ def Test(val_loader, model, criterion):
     top1 = AverageMeter()
     model.eval()
     model.cuda()
-    from tqdm import tqdm
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(tqdm(val_loader)):
             inputs, targets = inputs.cuda(), targets.cuda()
@@ -158,7 +160,7 @@ def Eval(test_loader, model, criterion, epoch):
         print("arc.avg : {:.2f}".format(arc.avg*100))
         print("")
         
-def Make_DataLoader(rootpath_dataset,name_source, name_target, name_mixed_folder='', train_aug=None,val_aug=None,mode_FReTAL = False):
+def Make_DataLoader(rootpath_dataset,name_source, name_target, name_mixed_folder='', train_aug=None,val_aug=None,mode_CORED = False):
     train_dir=''
     val_target_dir_MIXED=''
     val_target_loader_mixed=None
@@ -202,7 +204,7 @@ def Make_DataLoader(rootpath_dataset,name_source, name_target, name_mixed_folder
     train_target_dataset = CustumDataset(np.array(train_target_dataset.samples)[:,0],np.array(train_target_dataset.targets),train_aug)
     train_target_loader = DataLoader(train_target_dataset, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
 
-    if mode_FReTAL : train_target_loader_forcorrect = DataLoader(train_target_dataset, batch_size=128, shuffle=False, num_workers=4, pin_memory=True)
+    if mode_CORED : train_target_loader_forcorrect = DataLoader(train_target_dataset, batch_size=128, shuffle=False, num_workers=4, pin_memory=True)
     val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                    batch_size=128, shuffle=False, num_workers=8, pin_memory=True)
     val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
@@ -213,10 +215,10 @@ def Make_DataLoader(rootpath_dataset,name_source, name_target, name_mixed_folder
 
 
     dic = {'train_target':train_target_loader,'val_source':val_source_loader,'val_target':val_target_loader,'val_target_mix':val_target_loader_mixed}
-    dic_FReTAL = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
-    return dic, dic_FReTAL
+    dic_cored = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
+    return dic, dic_cored
 
-def Make_DataLoader_continual(rootpath_dataset,name_source, name_source2,name_target,name_source3='',train_aug=None,val_aug=None,mode_FReTAL = False):
+def Make_DataLoader_continual(rootpath_dataset,name_source, name_source2,name_target,name_source3='',train_aug=None,val_aug=None,mode_CORED = False):
     train_dir = os.path.join(rootpath_dataset+'/TransferLearning', '{}/train/'.format(name_target))
 
     #For Validataion
@@ -243,7 +245,7 @@ def Make_DataLoader_continual(rootpath_dataset,name_source, name_source2,name_ta
     train_target_dataset = datasets.ImageFolder(train_dir,transform=None)
     train_target_dataset = CustumDataset(np.array(train_target_dataset.samples)[:,0],np.array(train_target_dataset.targets),train_aug)
     train_target_loader = DataLoader(train_target_dataset, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
-    if mode_FReTAL : train_target_loader_forcorrect = DataLoader(train_target_dataset, batch_size=128, shuffle=False, num_workers=4, pin_memory=True)
+    if mode_CORED : train_target_loader_forcorrect = DataLoader(train_target_dataset, batch_size=128, shuffle=False, num_workers=4, pin_memory=True)
     val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                    batch_size=300, shuffle=True, num_workers=4, pin_memory=True)
     val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
@@ -255,12 +257,12 @@ def Make_DataLoader_continual(rootpath_dataset,name_source, name_source2,name_ta
 
 
     dic = {'train_target':train_target_loader,'val_source':val_source_loader,'val_source2':val_source_loader2,'val_source3':val_source_loader3,'val_target':val_target_loader}
-    dic_FReTAL = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
-    return dic, dic_FReTAL
+    dic_cored = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
+    return dic, dic_cored
     #     return train_target_loader,val_source_loader,val_target_loader,test_source_loader, test_target_loader,train_target_loader_forcorrect
 
 def Make_DataLoader_togeter(rootpath_dataset, name_source, name_target, name_target2, train_aug=None, val_aug=None,
-                              mode_FReTAL=False):
+                              mode_CORED=False):
     train_dir = os.path.join(rootpath_dataset + '/TransferLearning', name_target + '/train/')
     train_dir2 = os.path.join(rootpath_dataset + '/TransferLearning', name_target2 + '/train/')
 
@@ -291,7 +293,7 @@ def Make_DataLoader_togeter(rootpath_dataset, name_source, name_target, name_tar
                                          np.concatenate((np.array(train_target_dataset.targets),np.array(train_target_dataset2.targets))), train_aug)
     train_target_loader = DataLoader(train_target_dataset, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
 
-    if mode_FReTAL: train_target_loader_forcorrect = DataLoader(train_target_dataset, batch_size=128, shuffle=False,
+    if mode_CORED: train_target_loader_forcorrect = DataLoader(train_target_dataset, batch_size=128, shuffle=False,
                                                                 num_workers=4, pin_memory=True)
     val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                    batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
@@ -302,9 +304,9 @@ def Make_DataLoader_togeter(rootpath_dataset, name_source, name_target, name_tar
 
     dic = {'train_target': train_target_loader, 'val_source': val_source_loader,
            'val_target': val_target_loader,'val_target2': val_target_loader2}
-    dic_FReTAL = {'train_target_dataset': train_target_dataset,
+    dic_cored = {'train_target_dataset': train_target_dataset,
                   'train_target_forCorrect': train_target_loader_forcorrect}
-    return dic, dic_FReTAL
+    return dic, dic_cored
 
 
 

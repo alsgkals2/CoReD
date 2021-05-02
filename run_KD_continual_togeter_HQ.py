@@ -75,10 +75,9 @@ val_aug = transforms.Compose([
 ])
 open(save_path+'/{}_{}_{}.txt'.format(name_source,_name_target,name_saved_file),'a')
 
-dicLoader,dicFReTAL = Make_DataLoader_togeter('/media/data1/sha/CLRNet',name_source,name_target1,name_target2,train_aug,val_aug,mode_FReTAL=False)
+dicLoader,diccored= Make_DataLoader_togeter('/media/data1/sha/CLRNet',name_source,name_target1,name_target2,train_aug,val_aug,mode_CORED=False)
 
 teacher_model, student_model = None,None
-# prev_path_weight = '/home/mhkim/T-GD_MTL/current_train_with_shadata/{}/FReTAL_HQ'.format(name_source)
 path_pretrained = '/home/mhkim/T-GD/sha_faceforensics_jpeg_comp100_xception/{}'.format(name_source)
 # path_pretrained = os.path.join(path_weight,str(name_source))
 teacher_model = xception_origin.xception(num_classes=2, pretrained='')
