@@ -18,6 +18,12 @@ def _GetIndex(data_1):
         idx = 4
     return idx
 
+def _GetIndex_avgfeat(data_1):
+    idx = -1
+    if data_1 > 0.5 and data_1 <= 0.6:
+        idx = 0
+    return idx
+        
 def GetSplitLoaders_BinaryClasses(list_correct,dataset,train_aug=None,num_store_per=5):
     correct_loader=[[],[]]
     num_data = 0
@@ -54,9 +60,9 @@ def GetSplitLoadersRealFake(list_correct,dataset,train_aug=None,num_store_per=5)
                                      batch_size=200, shuffle=False, num_workers=4, pin_memory=True))    
     
     list_length_realfakeloader = [[len(j.dataset) if j else 0 for j in i] for i in correct_loader]
-    return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target),
+    return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target),save_ceckpoint_for_unlearning
 
-def GetListTeacherFeatureFakeReal(model, loader, showScatter = False):
+def GetListTeacherFeatureFakeReal(model, loader,mode='X',showScatter = False):
     list_features = [[],[]]
     maxpool = nn.MaxPool2d(4)
     model.eval()
@@ -71,8 +77,11 @@ def GetListTeacherFeatureFakeReal(model, loader, showScatter = False):
                 temp = None
                 for _,(img, label) in enumerate(loader[i][j]):
                     train_results[i].append(model(img.cuda()).cpu().detach().numpy())
-                    labels[i].append(label) 
-                    test = model.features(img.cuda())
+                    labels[i].append(label)
+                    if mode == 'E':
+                        test = model.extract_features(img.cuda())
+                    else:
+                        test = model.features(img.cuda())
                     if temp is not None:
                         temp = torch.cat((maxpool(test),temp))
                     else:
@@ -113,6 +122,25 @@ def func_correct(model, data_loader):
                     else : list_correct[idx][1].append(cnt)
                 cnt+=1
         return list_correct
+def func_correct_avgfeat(model, data_loader):
+    list_correct = [[[],[]] for i in range(5)]
+    model.eval()
+    cnt=0
+    with torch.no_grad():
+        for i, (inputs, targets) in enumerate(data_loader):
+            _inputs = inputs.cuda()
+            _targets = targets.cuda()
+            outputs = model(_inputs)
+            temp = F.softmax(outputs,dim=1)
+            for l in range(len(_targets)):
+                idx = _GetIndex_avgfeat(temp[l][_targets[l]].data)
+
+                if idx >= 0:
+                    if _targets[l]==0 : 
+                        list_correct[idx][0].append(cnt)
+                    else : list_correct[idx][1].append(cnt)
+                cnt+=1
+        return list_correct
           
 
 def GetRatioData(list_real_fake,correct_cnt):
@@ -132,6 +160,7 @@ def correct_binary(model, inputs, targets, b_ratio_Data = False):
         _targets = targets.cuda()
         outputs = model(_inputs)
         temp = nn.Softmax(dim=1)(outputs)
+        temp = temp.cpu()
         temp_ = [temp[l] for l in range(len(_targets))]
         temp_ = np.array(temp_).reshape(-1, 1)
         real_90, fake_90 = [], []
@@ -173,13 +202,71 @@ def correct_2(model, inputs, targets):
             cnt += 1
     return list_correct
 
-def GetFeatureMaxpool(model,list_loader): #list_loader : consists of index,data
+
+
+def correct_binary_avgfeat(model, inputs, targets, b_ratio_Data = False):
+    list_correct = [[[], []] for i in range(5)]
+    model.eval()
+    cnt = 0
+    correct_cnt=0
+    ratio_data = None
+    with torch.no_grad():
+        _inputs = inputs.cuda()
+        _targets = targets.cuda()
+        outputs = model(_inputs)
+        temp = nn.Softmax(dim=1)(outputs)
+        temp_ = [temp[l] for l in range(len(_targets))]
+        temp_ = np.array(temp_).reshape(-1, 1)
+        real_90, fake_90 = [], []
+        for l in range(len(_targets)):
+            idx = _GetIndex_avgfeat(temp[l][_targets[l]].data)
+            if idx >= 0:
+                correct_cnt+=1
+                if _targets[l] == 0:
+                    list_correct[idx][0].append((cnt,_inputs[l]))
+                    
+                else:
+                    list_correct[idx][1].append((cnt,_inputs[l]))
+            cnt += 1
+        if b_ratio_Data :
+            ratio_data = GetRatioData(list_correct,correct_cnt)
+    return list_correct, ratio_data
+
+def correct_2_avgfeat(model, inputs, targets):
+    list_correct = [[[], []] for i in range(5)]
+    model.eval()
+    cnt = 0
+   
+    _inputs = inputs.cuda()
+    _targets = targets.cuda()
+    with torch.no_grad():
+        outputs = model(_inputs)
+        temp = nn.Softmax(dim=1)(outputs)
+        temp_ = [temp[l] for l in range(len(_targets))]
+        temp_ = np.array(temp_).reshape(-1, 1)
+        real_90, fake_90 = [], []
+        for l in range(len(_targets)):
+            idx = 0
+            if idx >= 0:
+                correct_cnt+=1
+                if _targets[l] == 0:
+                    list_correct[idx][0].append((cnt,_inputs[l]))
+                else:
+                    list_correct[idx][1].append((cnt,_inputs[l]))
+            cnt += 1
+    return list_correct
+
+
+def GetFeatureMaxpool(model,list_loader,mode='X'): #list_loader : consists of index,data
     feat = None
     maxpool = nn.MaxPool2d(4) #If using other networks, we can consider the number '4'
     if not list_loader : return 0
-    for idx, im in list_loader:
-        im = torch.reshape(im,(1,3,128,128))
-        feat_std = model.features(im.cuda())
+    for idx, img in list_loader:
+        img = torch.reshape(img,(1,3,128,128))
+        if mode == 'E':
+            feat_std = model.extract_features(img.cuda())
+        else:
+            feat_std = model.features(img.cuda())
         feat_std = feat_std.cuda()
         if feat is not None:
             feat = torch.cat((maxpool(feat_std),feat))

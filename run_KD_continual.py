@@ -39,6 +39,7 @@ torch.cuda.manual_seed(random_seed)
 np.random.seed(random_seed)
 random.seed(random_seed)
 
+
 #hyperparameter
 num_gpu = args.num_gpu
 lr = args.lr
@@ -66,6 +67,7 @@ if '_' in name_sources:
     except:
         print('name_source3 is empty')
 save_path = './{}_{}/{}/{}/'.format(name_sources,name_target,args.name_saved_folder,args.name_saved_folder2)
+print(f'save_path is {save_path}')
 if '//' in save_path :
     save_path = save_path.replace('//','/')
 try:
@@ -134,13 +136,8 @@ criterion = nn.CrossEntropyLoss().cuda()
 optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
 scaler = GradScaler()
 
-list_correct = func_correct(teacher_model.cuda(),dicFReTAL['train_target_forCorrect'])
-correct_loaders,list_ratio_loader = GetSplitLoaders_BinaryClasses(list_correct,dicFReTAL['train_target_dataset'],train_aug, num_store_per)
           
 # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
-list_features = GetListTeacherFeatureFakeReal(teacher_model,correct_loaders)
-list_features = np.array(list_features)
-print(list_features[0].dtype)
 teacher_model, student_model = teacher_model.cuda(), student_model.cuda()
 
 best_acc,epochs=0, 100
@@ -184,28 +181,15 @@ for epoch in range(epochs):
 
         optimizer.zero_grad()
         with autocast(enabled=True):
-            for j in range(num_store_per):
-                for i in range(num_class):
-                    feat = GetFeatureMaxpool(student_model,correct_loader_std[j][i])
-                    if(list_features[i][j]==0):continue
-                    feat = feat-torch.tensor(list_features[i][j]).cuda()
-                    feat = torch.pow(feat.cuda(),2)
-                    list_features_std[i].append(feat)
             teacher_outputs = teacher_model(inputs)
             outputs = student_model(inputs)
             loss_main = criterion(outputs, targets)
             loss_kd = loss_fn_kd(outputs,targets,teacher_outputs)
-            sne_loss=0
-            for fs in list_features_std:
-                for ss in fs:
-                    if ss.requires_grad:
-                        sne_loss += ss
-            loss = loss_main + loss_kd + sne_loss
+            loss = loss_main + loss_kd
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-#         loss.backward()
-#         optimizer.step()
+            
         _, predicted = torch.max(outputs, 1)
         correct += (predicted == targets).sum().item()
         total += len(targets)
@@ -216,7 +200,7 @@ for epoch in range(epochs):
         except AttributeError:
             pass
         
-    print("Epoch: {}/{} - CE_Loss: {:.4f} | KD_Loss: {:.4f} | OTHER_LOSS: {:.4f} | ACC: {:.4f}".format(epoch+1, epochs, np.mean(running_loss), np.mean(running_loss_kd),  np.mean(running_loss_other), correct / total))
+    print("Epoch: {}/{} - CE_Loss: {:.4f} | KD_Loss: {:.4f} | ACC: {:.4f}".format(epoch+1, epochs, np.mean(running_loss), np.mean(running_loss_kd), correct / total))
     
     #validataion
     test_loss, test_auroc, test_acc = Test(dicLoader['val_target'], student_model, criterion)
