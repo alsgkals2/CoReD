@@ -1,7 +1,9 @@
 # CoReD
 
 # Overview
-__Title:__ *CoReD Continual Learning with feature-based representation learning and knowledge distillation* **[Accepted at ACMMM '21]**
+__Title:__ *CoReD Continual Learning with feature-based representation learning and knowledge distillation* 
+
+**([Accepted at ACMMM '21]()) ([arXiv]())**
 
 <img src="imgs/Overview.PNG" alt="CLRNet-pipeline" border="0" width="400">
 
