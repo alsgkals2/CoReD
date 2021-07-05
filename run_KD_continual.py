@@ -140,7 +140,7 @@ scaler = GradScaler()
 # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
 teacher_model, student_model = teacher_model.cuda(), student_model.cuda()
 
-best_acc,epochs=0, 100
+best_acc,epochs=0, args.epochs
 print('epochs={}'.format(epochs))
 is_best_acc = False
 ###########################################################

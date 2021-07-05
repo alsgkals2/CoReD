@@ -21,9 +21,7 @@ from torch.cuda.amp import GradScaler
 parser = argparse.ArgumentParser(description='PyTorch CONTINUAL LEARNING')
 # model
 parser.add_argument('--lr', '-l', type=float, default=0.05, help='initial learning rate')
-parser.add_argument('--KD_alpha', '-a', type=float, default=0.5, help='KD alpha')
 parser.add_argument('--num_class', '-nc', type=int, default=2, help='number of classes')
-parser.add_argument('--num_store_per', '-nsp', type=int, default=5, help='number of stores')
 parser.add_argument('--epochs', '-e', type=int, default=100, help='epochs')
 parser.add_argument('--batch_size', '-bs', type=int, default=128, help='batch size')
 parser.add_argument('--num_gpu', '-ng', type=str, default='2', help='excuted gpu number')
@@ -39,21 +37,18 @@ torch.cuda.manual_seed(random_seed)
 np.random.seed(random_seed)
 random.seed(random_seed)
 
+
 #hyperparameter
 num_gpu = args.num_gpu
 lr = args.lr
-KD_alpha = args.KD_alpha
 num_class = args.num_class
-num_store_per = args.num_store_per
 name_sources = args.name_sources
 name_target = args.name_target
 print('GPU num is' , num_gpu)
 os.environ['CUDA_VISIBLE_DEVICES'] =str(num_gpu)
 
 print('lr is ',lr)
-print('KD_alpha is ',KD_alpha)
 print('num_class is ',num_class)
-print('num_store_per is ',num_store_per)
 
 ####################initialization########################
 name_source, name_source2, name_source3 = name_sources,'',''
@@ -66,6 +61,7 @@ if '_' in name_sources:
     except:
         print('name_source3 is empty')
 save_path = './{}_{}/{}/{}/'.format(name_sources,name_target,args.name_saved_folder,args.name_saved_folder2)
+print(f'save_path is {save_path}')
 if '//' in save_path :
     save_path = save_path.replace('//','/')
 try:
@@ -125,6 +121,23 @@ student_model.train()
 teacher_model.cuda()
 student_model.cuda()
 
+# L2-reg & L2-norm
+def reg_cls(model):
+    l2_cls = torch.tensor(0.).cuda()
+    for name, param in model.named_parameters():
+        if name.startswith('last_linear'):
+            l2_cls += 0.5 * torch.norm(param) ** 2
+    return l2_cls
+
+def reg_l2sp(model):
+    sp_loss = torch.tensor(0.).cuda()
+    for name, param in model.named_parameters():
+        if not name.startswith('last_linear'):
+            sp_loss += 0.5 * torch.norm(param - teacher_model_weights[name]) ** 2
+    return sp_loss
+#-------------------
+
+
 #FREASING THE TEACHER MODEL
 teacher_model_weights = {}
 for name, param in teacher_model.named_parameters():
@@ -134,13 +147,8 @@ criterion = nn.CrossEntropyLoss().cuda()
 optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
 scaler = GradScaler()
 
-list_correct = func_correct(teacher_model.cuda(),dicFReTAL['train_target_forCorrect'])
-correct_loaders,list_ratio_loader = GetSplitLoaders_BinaryClasses(list_correct,dicFReTAL['train_target_dataset'],train_aug, num_store_per)
           
 # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
-list_features = GetListTeacherFeatureFakeReal(teacher_model,correct_loaders)
-list_features = np.array(list_features)
-print(list_features[0].dtype)
 teacher_model, student_model = teacher_model.cuda(), student_model.cuda()
 
 best_acc,epochs=0, args.epochs
@@ -149,8 +157,8 @@ is_best_acc = False
 ###########################################################
 for epoch in range(epochs):
     running_loss = []
-    running_loss_kd = []
-    running_loss_other = []
+    running_loss_sp= []
+    running_loss_cls = []
     correct,total = 0,0
     teacher_model.eval()
     student_model.train()
@@ -183,40 +191,39 @@ for epoch in range(epochs):
         list_features_std = [[],[]]
 
         optimizer.zero_grad()
-        with autocast(enabled=True):
-            for j in range(num_store_per):
-                for i in range(num_class):
-                    feat = GetFeatureMaxpool(student_model,correct_loader_std[j][i])
-                    if(list_features[i][j]==0):continue
-                    feat = feat-torch.tensor(list_features[i][j]).cuda()
-                    feat = torch.pow(feat.cuda(),2)
-                    list_features_std[i].append(feat)
+        with autocast(enabled=True):     
             teacher_outputs = teacher_model(inputs)
+            teacher_loss = criterion(teacher_outputs, targets)
+            sp_gamma = 0
+            sigmoid = nn.Sigmoid()
+            sp_gamma += 1*sigmoid(-teacher_loss)
             outputs = student_model(inputs)
             loss_main = criterion(outputs, targets)
-            loss_kd = loss_fn_kd(outputs,targets,teacher_outputs)
-            sne_loss=0
-            for fs in list_features_std:
-                for ss in fs:
-                    if ss.requires_grad:
-                        sne_loss += ss
-            loss = loss_main + loss_kd + sne_loss
+            loss_cls = 0
+            loss_sp = 0
+            loss_cls = reg_cls(student_model)
+            loss_sp = reg_l2sp(student_model)
+            loss =  loss_main + sp_gamma*loss_sp + sp_gamma*loss_cls
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-#         loss.backward()
-#         optimizer.step()
+        losses.update(loss.data.tolist(), inputs.size(0))
+        cls_losses.update(loss_cls, inputs.size(0))
+        sp_losses.update(loss_sp, inputs.size(0))
+        main_losses.update(loss_main.tolist(), inputs.size(0))
+        alpha.update(sp_gamma, inputs.size(0))
+        
         _, predicted = torch.max(outputs, 1)
         correct += (predicted == targets).sum().item()
         total += len(targets)
         running_loss.append(loss_main.cpu().detach().numpy())
-        running_loss_kd.append(loss_kd.cpu().detach().numpy())
         try:
-            running_loss_other.append(sne_loss.cpu().detach().numpy())
+            running_loss_sp.append(loss_sp.cpu().detach().numpy())
+            running_loss_cls.append(loss_cls.cpu().detach().numpy())
         except AttributeError:
             pass
         
-    print("Epoch: {}/{} - CE_Loss: {:.4f} | KD_Loss: {:.4f} | OTHER_LOSS: {:.4f} | ACC: {:.4f}".format(epoch+1, epochs, np.mean(running_loss), np.mean(running_loss_kd),  np.mean(running_loss_other), correct / total))
+    print("Epoch: {}/{} - CE_Loss: {:.4f} | loss_sp: {:.4f} | loss_cls: {:.4f} | ACC: {:.4f}".format(epoch+1, epochs, np.mean(running_loss), np.mean(running_loss_sp), np.mean(running_loss_cls), correct / total))
     
     #validataion
     test_loss, test_auroc, test_acc = Test(dicLoader['val_target'], student_model, criterion)
