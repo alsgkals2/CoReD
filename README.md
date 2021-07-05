@@ -1,7 +1,7 @@
-# CoReD
+# 
 
-# Overview
-__Title:__ *CoReD Continual Learning with feature-based representation learning and knowledge distillation* 
+# CoReD - Overview
+__Title:__ *CoReD: Generalizing Fake Media Detection with Continual Representation using Distillation* 
 
 **([Accepted at ACMMM '21](https://2021.acmmm.org/)) ([arXiv soon]())**
 
