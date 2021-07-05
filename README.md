@@ -5,7 +5,7 @@ __Title:__ *CoReD Continual Learning with feature-based representation learning 
 
 **([Accepted at ACMMM '21](https://2021.acmmm.org/)) ([arXiv soon]())**
 
-<img src="imgs/Overview.PNG" alt="CLRNet-pipeline" border="0" width=500">
+<img src="imgs/Overview.PNG" alt="CLRNet-pipeline" border="0" width="600">
 
 ## Citation
 
