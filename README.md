@@ -12,7 +12,14 @@ __Title:__ *CoReD: Generalizing Fake Media Detection with Continual Representati
 If you find our work useful for your research, please consider citing the following papers :)
 
 ```
-Coming soon!
+@misc{kim2021cored,
+    title={CoReD: Generalizing Fake Media Detection with Continual Representation using Distillation},
+    author={Minha Kim and Shahroz Tariq and Simon S. Woo},
+    year={2021},
+    eprint={2107.02408},
+    archivePrefix={arXiv},
+    primaryClass={cs.CV}
+}
 ```
 
 # Pretrained weights
