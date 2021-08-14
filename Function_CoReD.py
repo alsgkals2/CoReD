@@ -4,6 +4,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from Function_common import CustumDataset
+
 def _GetIndex(data_1):
     idx = -1
     if data_1 > 0.5 and data_1 <= 0.6:
@@ -43,22 +44,6 @@ def GetSplitLoaders_BinaryClasses(list_correct,dataset,train_aug=None,num_store_
     print(list_length_realfakeloader)
     return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target)
 
-def GetSplitLoadersRealFake(list_correct,dataset,train_aug=None,num_store_per=5):
-    correct_loader=[[],[]]
-    num_data = 0
-    for i in range(num_store_per):
-        list_temp = [list_correct[i][0],list_correct[i][1]]
-        for rf in range(len(list_temp)):
-            if not list_temp[rf] :
-                correct_loader[rf].append([])
-                continue
-            temp_dataset = copy.deepcopy(dataset)
-            temp_dataset.data = np.array(temp_dataset.data[list_correct[i][rf]])
-            temp_dataset.target = np.array(temp_dataset.target[list_correct[i][rf]])
-            custum = CustumDataset(temp_dataset.data,temp_dataset.target,train_aug)
-            correct_loader[rf].append(DataLoader(custum,
-                                     batch_size=200, shuffle=False, num_workers=4, pin_memory=True))    
-    
     list_length_realfakeloader = [[len(j.dataset) if j else 0 for j in i] for i in correct_loader]
     return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target),save_ceckpoint_for_unlearning
 
@@ -111,9 +96,6 @@ def func_correct(model, data_loader):
             _targets = targets.cuda()
             outputs = model(_inputs)
             temp = F.softmax(outputs,dim=1)
-            # temp_ = [temp[l] for l in range(len(_targets))]
-            # temp_ = np.array(temp_).reshape(-1, 1)
-            # real_90 ,fake_90 = [], []
             for l in range(len(_targets)):
                 idx = _GetIndex(temp[l][_targets[l]].data)
                 if idx >= 0:
@@ -122,6 +104,7 @@ def func_correct(model, data_loader):
                     else : list_correct[idx][1].append(cnt)
                 cnt+=1
         return list_correct
+
 def func_correct_avgfeat(model, data_loader):
     list_correct = [[[],[]] for i in range(5)]
     model.eval()
@@ -136,16 +119,14 @@ def func_correct_avgfeat(model, data_loader):
                 idx = _GetIndex_avgfeat(temp[l][_targets[l]].data)
 
                 if idx >= 0:
-                    if _targets[l]==0 : 
+                    if _targets[l] == 0 :
                         list_correct[idx][0].append(cnt)
                     else : list_correct[idx][1].append(cnt)
-                cnt+=1
+                cnt += 1
         return list_correct
           
-
 def GetRatioData(list_real_fake,correct_cnt):
     if correct_cnt == 0 :return 0
-    numCorrect = 0
     list_length_realfakeloader = np.array([[len(j) if j else 0 for j in i] for i in list_real_fake])
     return list_length_realfakeloader/correct_cnt
 
