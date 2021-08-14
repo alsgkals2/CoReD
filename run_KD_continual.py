@@ -1,11 +1,17 @@
-
+import sys
+import os.path
+import torch
+import random
+import numpy as np
+import torch.nn as nn
 import torch.optim as optim
 import argparse
 from torchvision import transforms
 
 import xception_origin
+from EarlyStopping import EarlyStopping
 from Function_common import *
-from Function_CoReD import *
+from Function_FReTAL import *
 from torch.cuda.amp import autocast
 from torch.cuda.amp import GradScaler
 
@@ -14,36 +20,36 @@ from torch.cuda.amp import GradScaler
 #----------------------------
 parser = argparse.ArgumentParser(description='PyTorch CONTINUAL LEARNING')
 # model
-parser.add_argument('--name_sources', '-s', type=str, default='DeepFake', help='name of sources(more than one)(ex.DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap)')
-parser.add_argument('--name_target', '-t', type=str, default='Face2Face', help='name of target(only one)(ex.DeepFake / Face2Face / FaceSwap)')
-parser.add_argument('--name_saved_folder1', '-folder1', type=str, default='CoReD', help='name of folder that will be made')
-parser.add_argument('--name_saved_folder2', '-folder2', type=str, default='', help='name of folder that will be made in folder1 (just option)')
-parser.add_argument('--path_data', '-d',type=str, default='./data/DeepFake', help='the folder of path must contains real/fake folders that is consists of images')
-parser.add_argument('--path_preweight', '-w', '-path', type=str, default='./weights', help='the folder of path must source(s) folder that have model weights')
-
 parser.add_argument('--lr', '-l', type=float, default=0.05, help='initial learning rate')
 parser.add_argument('--KD_alpha', '-a', type=float, default=0.5, help='KD alpha')
 parser.add_argument('--num_class', '-nc', type=int, default=2, help='number of classes')
-parser.add_argument('--num_store', '-ns', type=int, default=5, help='number of stores')
-parser.add_argument('--epochs', '-me', type=int, default=100, help='epochs')
-parser.add_argument('--batch_size', '-nb', type=int, default=128, help='batch size')
+parser.add_argument('--num_store_per', '-nsp', type=int, default=5, help='number of stores')
+parser.add_argument('--epochs', '-e', type=int, default=100, help='epochs')
+parser.add_argument('--batch_size', '-bs', type=int, default=128, help='batch size')
 parser.add_argument('--num_gpu', '-ng', type=str, default='2', help='excuted gpu number')
+parser.add_argument('--name_sources', '-s', type=str, default='DeepFake', help='name of sources(more than one)(ex.DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap)')
+parser.add_argument('--name_target', '-t', type=str, default='Face2Face', help='name of target(only one)(ex.DeepFake / Face2Face / FaceSwap)')
+parser.add_argument('--name_saved_folder', '-nfolder', type=str, default='CoReD', help='name of folder that will be made')
+parser.add_argument('--name_saved_folder2', '-nfolder2', type=str, default='', help='name of folder that will be made more specifically')
 
 args = parser.parse_args()
-set_seeds()
+random_seed = 2020
+torch.manual_seed(random_seed)
+torch.cuda.manual_seed(random_seed)
+np.random.seed(random_seed)
+random.seed(random_seed)
+
 
 #hyperparameter
+num_gpu = args.num_gpu
 lr = args.lr
 KD_alpha = args.KD_alpha
 num_class = args.num_class
-num_store_per = args.num_store
+num_store_per = args.num_store_per
 name_sources = args.name_sources
 name_target = args.name_target
-path_data = args.path_data
-path_preweight = args.path_preweight
-
-print('GPU num is' , args.num_gpu)
-os.environ['CUDA_VISIBLE_DEVICES'] =str(args.num_gpu)
+print('GPU num is' , num_gpu)
+os.environ['CUDA_VISIBLE_DEVICES'] =str(num_gpu)
 
 print('lr is ',lr)
 print('KD_alpha is ',KD_alpha)
@@ -60,7 +66,8 @@ if '_' in name_sources:
         name_source3 = temp[2]
     except:
         print('name_source3 is empty')
-save_path = './{}_{}/{}/{}/'.format(name_sources,name_target,args.path_preweight,args.name_saved_folder2)
+save_path = './{}_{}/{}/{}/'.format(name_sources,name_target,args.name_saved_folder,args.name_saved_folder2)
+print(f'save_path is {save_path}')
 if '//' in save_path :
     save_path = save_path.replace('//','/')
 try:
@@ -71,7 +78,8 @@ except OSError:
 
 print('name_source is ',name_source)
 print('name_source2 is ',name_source2)
-print('name_source3 is',name_source3)
+print('name_sourc_ ',name_source3)
+
 print('name_target is ',name_target)
 print('save_path is ',save_path)
 
@@ -88,26 +96,36 @@ val_aug = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
 ])
-if '_' not in name_sources: #Task1 (pre-train before continual learning)
-    dicLoader,dicFReTAL = Make_DataLoader(path_data,name_source,name_target,train_aug=train_aug,val_aug=val_aug,mode_FReTAL=True)
-else: #Task2-4 (continual learning)
-    dicLoader,dicFReTAL = Make_DataLoader_continual(path_data,name_source=name_source,name_target=name_target,train_aug=train_aug,val_aug=val_aug,mode_FReTAL=True)
+if '_' not in name_sources:
+#     dicLoader,dicFReTAL = Make_DataLoader('/media/data1/sha/CLRNet_jpg25/CLRNet',name_source,name_target,train_aug=train_aug,val_aug=val_aug,mode_FReTAL=True)
+    dicLoader,dicFReTAL = Make_DataLoader('/media/data1/sha/CLRNet',name_source,name_target,train_aug=train_aug,val_aug=val_aug,mode_FReTAL=True)
+
+else:
+#     dicLoader,dicFReTAL = Make_DataLoader_continual('/media/data1/sha/CLRNet_jpg25/CLRNet',name_source,name_source2,name_target,name_source3,train_aug=train_aug,val_aug=val_aug,mode_FReTAL=True)
+    dicLoader,dicFReTAL = Make_DataLoader_continual('/media/data1/sha/CLRNet',name_source=name_source,name_target=name_target,train_aug=train_aug,val_aug=val_aug,mode_FReTAL=True)
+
 
 teacher_model, student_model = None,None
-path_preweight = os.path.join(path_preweight,'{}'.format(name_sources))
+# prev_path_weight = os.path.join('/home/mhkim/CoReD/FReTAL','{}/CONTINUAL_HQ'.format(name_sources, args.name_saved_folder))
+# prev_path_weight = '/home/mhkim/CoReD/current_train_with_shadata/%s'%name_sources
+# prev_path_weight = os.path.join(prev_path_weight,'FReTAL_HQ')
+prev_path_weight = os.path.join('/home/mhkim/T-GD/sha_faceforensics_jpeg_comp100_xception','{}'.format(name_sources))
 
 print('-------prev_path_weight--------')
-print(path_preweight)
+print(prev_path_weight)
 print('-------------------------------')
 teacher_model = xception_origin.xception(num_classes=2, pretrained='')
-checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
+checkpoint =torch.load(prev_path_weight+'/model_best_accuracy.pth.tar')
+# checkpoint =torch.load(prev_path_weight+'/model_best_accuracy.pth.tar')
 teacher_model.load_state_dict(checkpoint['state_dict'])
-teacher_model.eval(); teacher_model.cuda()
-
 student_model = xception_origin.xception(num_classes=2,pretrained='')
-checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
+checkpoint =torch.load(prev_path_weight+'/model_best_accuracy.pth.tar')
+# checkpoint =torch.load(prev_path_weight+'/model_best_accuracy.pth.tar')
 student_model.load_state_dict(checkpoint['state_dict'])
-student_model.train(); student_model.cuda()
+teacher_model.eval()
+student_model.train()
+teacher_model.cuda()
+student_model.cuda()
 
 #FREASING THE TEACHER MODEL
 teacher_model_weights = {}
@@ -157,6 +175,8 @@ for epoch in range(epochs):
                 bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
                 inputs[boolean, :, bbx1:bbx2, bby1:bby2] = inputs[rand_index, :, bbx1:bbx2, bby1:bby2]
 
+        correct_loader_std,_ = correct_binary(student_model.cuda(), inputs, targets)
+#         list_features_std = [[] for i in range(num_class)]
         list_features_std = [[],[]]
 
         optimizer.zero_grad()
@@ -166,10 +186,10 @@ for epoch in range(epochs):
             loss_main = criterion(outputs, targets)
             loss_kd = loss_fn_kd(outputs,targets,teacher_outputs)
             loss = loss_main + loss_kd
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            
         _, predicted = torch.max(outputs, 1)
         correct += (predicted == targets).sum().item()
         total += len(targets)
@@ -183,22 +203,24 @@ for epoch in range(epochs):
     print("Epoch: {}/{} - CE_Loss: {:.4f} | KD_Loss: {:.4f} | ACC: {:.4f}".format(epoch+1, epochs, np.mean(running_loss), np.mean(running_loss_kd), correct / total))
     
     #validataion
-    _, _, total_acc = Test(dicLoader['val_target'], student_model, criterion)
-    _, _, source_acc = Test(dicLoader['val_source'], student_model, criterion)
+    test_loss, test_auroc, test_acc = Test(dicLoader['val_target'], student_model, criterion)
+    total_acc = test_acc
+    source_loss, source_auroc, source_acc = Test(dicLoader['val_source'], student_model, criterion)
     total_acc += source_acc
     if name_source2:
-        _, _, source_acc2 = Test(dicLoader['val_source2'], student_model, criterion)
+        source_loss2, source_auroc2, source_acc2 = Test(dicLoader['val_source2'], student_model, criterion)
         total_acc += source_acc2
     if name_source3:
-        _, _, source_acc3 = Test(dicLoader['val_source3'], student_model, criterion)
+        source_loss3, source_auroc3, source_acc3 = Test(dicLoader['val_source3'], student_model, criterion)
         total_acc += source_acc3
         
     is_best_acc = total_acc > best_acc  
-    if (epoch+1) % 20 == 0 or is_best_acc:
+#     best_acc = max(total_acc, best_acc)
+    if (epoch+1)%20 ==0 or is_best_acc:
         if is_best_acc : best_acc = total_acc
         is_best_acc = True
-        best_acc = max(correct / total, best_acc)
-        save_checkpoint({
+        best_acc = max(correct / total,best_acc)
+        save_checkpoint_for_unlearning({
             'epoch': epoch + 1,
             'state_dict': student_model.state_dict(),
             'best_acc': best_acc,

@@ -1,3 +1,4 @@
+import os
 import torch
 import shutil
 import numpy as np
@@ -12,7 +13,7 @@ def save_checkpoint(state, checkpoint='checkpoint', filename='checkpoint.pth.tar
     if ACC_BEST :
         name_save = 'model_best_accuracy.pth.tar'
         shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
-def save_checkpoint(state, checkpoint='checkpoint', filename='checkpoint.pth.tar' , isLoss=False, isAcc=False):
+def save_checkpoint_for_unlearning(state, checkpoint='checkpoint', filename='checkpoint.pth.tar' , isLoss=False, isAcc=False):
     filepath = os.path.join(checkpoint, filename)
     torch.save(state, filepath)
     if isLoss :
