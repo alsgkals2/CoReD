@@ -3,7 +3,7 @@
 # CoReD - Overview
 __Title:__ *CoReD: Generalizing Fake Media Detection with Continual Representation using Distillation* 
 
-**(Accepted for oral presentation at [ACMMM '21](https://2021.acmmm.org/)) **
+**(Accepted for oral presentation at [ACMMM '21](https://2021.acmmm.org/))**
 
 Paper Link: ([arXiv](https://arxiv.org/abs/2107.02408)) (ACMMM version (soon))
 
