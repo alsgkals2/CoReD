@@ -53,9 +53,22 @@ To train and evaluate the model(s) in the paper, run this command:
 
 ## Result
 - **AUC scores (%)** of various methods on compared datasets.
-#### Task1
+#### - Task1 (GAN datasets and FaceForensics++ datasets)
 <div style="text-align:center">
-<img src="./imgs/task1_gan.png" width="500"/> <img src="./imgs/task1_ff.png" width="500"/>
+    <img src="./imgs/task1_gan.png" width="350"/> <img src="./imgs/task1_ff.png" width="350"/>
+</div>
+
+#### - Task2 - 4
+<div style="text-align:center">
+    <img src="./imgs/task2.png" width="350"/>
+</div>
+
+<div style="text-align:center">
+    <img src="./imgs/task3.png" width="350"/>
+</div>
+
+<div style="text-align:center">
+    <img src="./imgs/task4.png" width="350"/>
 </div>
 
 ## Citation
@@ -72,7 +85,7 @@ If you find our work useful for your research, please consider citing the follow
 ```
  
 ## - Contect
-If you have any questions, please contact us at kimminha/shahroz@g.skku.edu.
+If you have any questions, please contact us at **kimminha/shahroz@g.skku.edu**
  
 ## References
 ###### [1] 
