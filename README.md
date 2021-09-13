@@ -55,7 +55,7 @@ To train and evaluate the model(s) in the paper, run this command:
 - **AUC scores (%)** of various methods on compared datasets.
 #### Task1
 <div style="text-align:center">
-<img src="./images/tase1_gan.png" width="400" height="280"/> <img src="./images/tase1_ff.png" width="400" height="280"/>
+<img src="./imgs/take1_gan.png" width="500"/> <img src="./imgs/take1_ff.png" width="500"/>
 </div>
 
 ## Citation
