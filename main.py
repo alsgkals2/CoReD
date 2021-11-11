@@ -16,8 +16,8 @@ if __name__ == '__main__':
     parser.add_argument('--name_target', '-t', type=str, default='Face2Face', help='name of target(only one)(ex.DeepFake / Face2Face / FaceSwap) / used for Train only')
     parser.add_argument('--name_saved_folder1', '-folder1', type=str, default='CoReD', help='name of folder that will be made')
     parser.add_argument('--name_saved_folder2', '-folder2', type=str, default='', help='name of folder that will be made in folder1 (just option)')
-    parser.add_argument('--path_data', '-d',type=str, default='./data/DeepFake', help='the folder of path must contains real/fake folders that is consists of images')
-    parser.add_argument('--path_preweight', '-w', '-path', type=str, default='./weights', help='the folder of path must source(s) folder that have model weights')
+    parser.add_argument('--path_data', '-d',type=str, default='./data/DeepFake', help='the folder of path must contains Sources & Target folder names')
+    parser.add_argument('--path_preweight', '-w', '-path', type=str, default='', help='You can select the full path or folder path included in the file \'.pth\'')
 
     parser.add_argument('--lr', '-l', type=float, default=0.05, help='initial learning rate')
     parser.add_argument('--KD_alpha', '-a', type=float, default=0.5, help='KD alpha')

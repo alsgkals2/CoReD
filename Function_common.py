@@ -110,12 +110,7 @@ def Make_DataLoader(rootpath_dataset,
         source_dataset = os.path.join(rootpath_dataset,name_source)
         target_dataset = os.path.join(rootpath_dataset,name_target)
         val_source_dir = os.path.join(source_dataset, 'val')
-        if name_mixed_folder :
-            target_dataset_mix = os.path.join(rootpath_dataset.replace('CLRNet_jpg25', ''), name_target)
-            val_target_dir = os.path.join(target_dataset, 'val')
-            val_target_dir_mixed = os.path.join(target_dataset_mix,'val')
-        else:
-            val_target_dir = os.path.join(target_dataset, 'val')
+        val_target_dir = os.path.join(target_dataset, 'val')
 
         #check the paths
         print("DATASET PATHS")
@@ -172,7 +167,6 @@ def Make_DataLoader(rootpath_dataset,
         dic_CoReD = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
     
     else: #Test mode
-        # dir_testset = os.path.join(rootpath_dataset,name_target)
         dir_testset = os.path.join(rootpath_dataset, 'test')
         loader_test = DataLoader(datasets.ImageFolder(dir_testset, val_aug),
                                                 batch_size=batch_size,
@@ -448,20 +442,32 @@ def get_augs():
 
 def load_models(path_preweight, name_sources, MakeTeacher=True):
     teacher_model, student_model = None,None
-    path_preweight = os.path.join(path_preweight,name_sources)
+    if path_preweight:
+        path_preweight = os.path.join(path_preweight,name_sources)
+        checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
+        
     if MakeTeacher:
         teacher_model = xception_origin.xception(num_classes=2, pretrained='')
-        checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
         teacher_model.load_state_dict(checkpoint['state_dict'])
         teacher_model.eval(); teacher_model.cuda()
 
     student_model = xception_origin.xception(num_classes=2,pretrained='')
-    checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
-    student_model.load_state_dict(checkpoint['state_dict'])
+    if path_preweight:
+        student_model.load_state_dict(checkpoint['state_dict'])
     student_model.train(); student_model.cuda()
 
     return teacher_model, student_model
 
+def save_checkpoint(state, checkpoint='checkpoint', filename='checkpoint.pth.tar' , AUC_BEST = False, ACC_BEST = False):
+    name_save = ''
+    filepath = os.path.join(checkpoint, filename)
+    torch.save(state, filepath)
+    if AUC_BEST :
+        name_save = 'model_best.pth.tar'
+        shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
+    if ACC_BEST :
+        name_save = 'model_best_accuracy.pth.tar'
+        shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
 
 def initialization(args):
     print('GPU num is' , args.num_gpu)
@@ -496,13 +502,3 @@ def initialization(args):
         dicLoader,dicCoReD = Make_DataLoader_continual(path_data, name_source=dict_source['source'], name_target=name_target, train_aug=train_aug, val_aug=val_aug, mode_CoReD=True, batch_size=args.batch_size, TRAIN_MODE=not args.test)
     return dicLoader, dicCoReD, dict_source
     
-def save_checkpoint(state, checkpoint='checkpoint', filename='checkpoint.pth.tar' , AUC_BEST = False, ACC_BEST = False):
-    name_save = ''
-    filepath = os.path.join(checkpoint, filename)
-    torch.save(state, filepath)
-    if AUC_BEST :
-        name_save = 'model_best.pth.tar'
-        shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
-    if ACC_BEST :
-        name_save = 'model_best_accuracy.pth.tar'
-        shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
