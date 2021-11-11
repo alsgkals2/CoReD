@@ -26,29 +26,60 @@ torch==1.8.1
 sklearn  
 numpy  
 opencv_python  
-    
+
 ```console
 pip install -r requirements.txt
 ```
-    
-### - Full Usages
-```console
-tbd
-```
+ 
 
 ####
-- **Note that** 
+- **Note that** : 
 
-### - Training & Evaluation
+## - Train & Evaluation
+    
+### - Full Usages
+
+```console
+  -m                   Model name = ['CoReD','KD','TG','FT']
+  -te                  Turn on test mode True/False
+  -s                   Name of 'Source' datasets. one or multiple names. (ex. DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap)
+  -t                   Name of 'Target' dataset. only a single name. (ex.DeepFake / Face2Face / FaceSwap / NeuralTextures) / used for Train only')
+  -folder1             Sub-name of folder in Save path when model save
+  -folder2             'name of folder that will be made in folder1 (just option)'
+  -d                   Folder of path must contains Sources & Target folder names
+  -w                   You can select the full path or folder path included in the '.pth' file
+  -lr                  Learning late (For training)
+  -a                   Alpha of KD-Loss
+  -nc                  Number of Classes
+  -ns                  Number of Stores
+  -me                  Number of Epoch (For training)
+  -nb                  Batch-Size
+  -ng                  GPU-device can be set as ei 0,1,2 for multi-GPU (default=0) 
+```
+    
+####
+
+### Train
 To train and evaluate the model(s) in the paper, run this command:
 - **Task1**
+   We must train pre-trained single model for task1 .
     ```TRAIN
-   python 
+   python main.py -s={Source Name} -d={folder_path} -w={weights}'
+   python main.py -s=DeepFake -d=./mydrive/dataset/' #Example 
     ```
+- **Task2 - 4**
+    ```TRAIN
+   python main.py -s={Source Name} -t={Target Name} -d={folder_path} -w={weights}'
+   python main.py -s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset/ -w=./weights' #Example
+    ```
+**Note that : ** If you set _-s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset -w=./weights_ when you start training, data path **"./mydrive/dataset"** must include **'Face2Face', 'DeepFake', and 'FaceSwap'**, and these must be contained the **'train','val'** folder which include **'real'&'fake'** folders.
+
+### Evaluation
    After train the model, you can evaluate the result.
     ```EVAL
-    python 
-    ```
+    python main.py -d= -w={weights} --test'
+    python main.py -d=./mydrive/dataset/ -w=./weights/bestmodel.pth --test' #Example
+    ```    
 
 
 ## Result
@@ -86,9 +117,6 @@ If you find our work useful for your research, please consider citing the follow
  
 ## - Contect
 If you have any questions, please contact us at **kimminha/shahroz@g.skku.edu**
- 
-## References
-###### [1] 
 
 
 ## - License
