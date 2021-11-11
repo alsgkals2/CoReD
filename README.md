@@ -59,7 +59,7 @@ pip install -r requirements.txt
     
 ####
 
-### Train
+### - Train
 To train and evaluate the model(s) in the paper, run this command:
 - **Task1**
    We must train pre-trained single model for task1 .
@@ -72,35 +72,34 @@ To train and evaluate the model(s) in the paper, run this command:
    python main.py -s={Source Name} -t={Target Name} -d={folder_path} -w={weights}'
    python main.py -s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset/ -w=./weights' #Example
     ```
-**Note that : ** If you set _-s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset -w=./weights_ when you start training, data path **"./mydrive/dataset"** must include **'Face2Face', 'DeepFake', and 'FaceSwap'**, and these must be contained the **'train','val'** folder which include **'real'&'fake'** folders.
+- **Note that** If you set _-s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset -w=./weights_ when you start training, data path **"./mydrive/dataset"** must include **'Face2Face', 'DeepFake', and 'FaceSwap'**, and these must be contained the **'train','val'** folder which include **'real'&'fake'** folders.
 
-### Evaluation
+### - Evaluation
    After train the model, you can evaluate the result.
     ```EVAL
     python main.py -d= -w={weights} --test'
     python main.py -d=./mydrive/dataset/ -w=./weights/bestmodel.pth --test' #Example
     ```    
 
-
-## Result
+## - Result
 - **AUC scores (%)** of various methods on compared datasets.
+    
 #### - Task1 (GAN datasets and FaceForensics++ datasets)
-<div style="text-align:center">
+<p align="center">
     <img src="./imgs/task1_gan.png" width="350"/> <img src="./imgs/task1_ff.png" width="350"/>
-</div>
+</p>
 
 #### - Task2 - 4
-<div style="text-align:center">
+<p align="center">
     <img src="./imgs/task2.png" width="350"/>
-</div>
-
-<div style="text-align:center">
+</p>
+<p align="center">
     <img src="./imgs/task3.png" width="350"/>
-</div>
-
-<div style="text-align:center">
+</p>
+<p align="center">
     <img src="./imgs/task4.png" width="350"/>
-</div>
+</p>
+
 
 ## Citation
 If you find our work useful for your research, please consider citing the following papers :)
