@@ -64,21 +64,22 @@ To train and evaluate the model(s) in the paper, run this command:
 - **Task1**
    We must train pre-trained single model for task1 .
     ```TRAIN
-   python main.py -s={Source Name} -d={folder_path} -w={weights}'
+   python main.py -s={Source Name} -d={folder_path} -w={weights}  
    python main.py -s=DeepFake -d=./mydrive/dataset/' #Example 
     ```
 - **Task2 - 4**
     ```TRAIN
-   python main.py -s={Source Name} -t={Target Name} -d={folder_path} -w={weights}'
+   python main.py -s={Source Name} -t={Target Name} -d={folder_path} -w={weights}  
    python main.py -s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset/ -w=./weights' #Example
     ```
 - **Note that** If you set _-s=Face2Face_DeepFake -t=FaceSwap -d=./mydrive/dataset -w=./weights_ when you start training, data path **"./mydrive/dataset"** must include **'Face2Face', 'DeepFake', and 'FaceSwap'**, and these must be contained the **'train','val'** folder which include **'real'&'fake'** folders.
 
 ### - Evaluation
-   After train the model, you can evaluate the result.
+After train the model, you can evaluate the dataset.  
+- **Eval**    
     ```EVAL
-    python main.py -d= -w={weights} --test'
-    python main.py -d=./mydrive/dataset/ -w=./weights/bestmodel.pth --test' #Example
+    python main.py -d= -w={weights} --test  
+    python main.py -d=./mydrive/dataset/DeepFake/testset -w=./weights/bestmodel.pth --test #Example
     ```    
 
 ## - Result
