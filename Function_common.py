@@ -412,9 +412,6 @@ def Eval(args,log):
             for _c in c:
                 if '.pth.tar' in _c:
                     fullpath = os.path.join(a,_c)
-                    # st_folder = fullpath.split('weights/')[-1].split('/')[0]
-                    # if 'GAN' in st_folder and st_folder.count('_') < 2: continue
-                    # elif st_folder.count('_') < 3: continue
                     model_list.append(fullpath)
     elif os.path.isfile(weight_path):
         model_list.append(weight_path)
@@ -422,8 +419,8 @@ def Eval(args,log):
     for model_item in model_list:
         _, student_model = load_models(model_item, log, args.test)
         criterion = nn.CrossEntropyLoss().cuda()
-        _, _, acc = Test(dicLoader['test_dataset'], student_model, criterion, log)
-    _, _, acc = Test(dicLoader['source_dataset'], student_model, criterion)
+        _, _, _ = Test(dicLoader['test_dataset'], student_model, criterion, log)
+    _, _, _ = Test(dicLoader['source_dataset'], student_model, criterion)
 
 #LOSS-------------------
 def loss_fn_kd(outputs, labels, teacher_outputs, KD_T=20, KD_alpha=0.5):
@@ -449,10 +446,10 @@ def get_augs():
     return train_aug, val_aug
 
 
-def load_models(path_preweight, name_sources, isTrain=True):
+def load_models(path_preweight, name_sources, MakeTeacher=True):
     teacher_model, student_model = None,None
     path_preweight = os.path.join(path_preweight,name_sources)
-    if isTrain:
+    if MakeTeacher:
         teacher_model = xception_origin.xception(num_classes=2, pretrained='')
         checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
         teacher_model.load_state_dict(checkpoint['state_dict'])

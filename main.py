@@ -2,6 +2,8 @@ import CoReD
 import FT_Standard
 import KD
 import TGD
+import Vanilla
+
 import argparse
 from Function_common import Eval
 import Logger
@@ -35,6 +37,8 @@ if __name__ == '__main__':
             run_module = TGD
         elif args.model == 'FT':
             run_module = FT_Standard
+        elif args.model == 'PRETRAIN':
+            run_module = Vanilla
         else:
             print("CAN NOT EXCUTE !")
             exit()
@@ -42,7 +46,8 @@ if __name__ == '__main__':
     else:
         log = Logger.Logger()
         log_dir = './log'
+        name_file = '[EVAL]result_eval.txt'
         os.makedirs(log_dir, exist_ok=True)
-        log.open(log_dir + f'/[eval_yt]GAN_script2_v2.txt', mode='a')
+        log.open(os.path.join(log_dir,name_file), mode='a')
         log.write('\n')
         Eval(args, log)
