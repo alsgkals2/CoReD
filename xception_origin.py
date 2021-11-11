@@ -167,10 +167,7 @@ class Xception(nn.Module):
         # #-----------------------------
 
     def features(self, input):
-#         print(input.size())
-
         x = self.conv1(input) #(32, 299, 299)
-#         print(x.size())
         x = self.bn1(x)
         x = self.relu(x)
 
@@ -196,11 +193,7 @@ class Xception(nn.Module):
         x = self.relu(x)
 
         x = self.conv4(x) #(2048, 299, 299)
-#         print(x.size())
-
-
         x = self.bn4(x)
-#         print(x.size())
 
         return x
 
@@ -317,54 +310,6 @@ class Xception_concat(nn.Module):
         x = self.features(input)
         x = self.logits(x)
         return x
-
-'''
-    def features(self, input):
-        x = self.conv1(input)
-        x = self.bn1(x)
-        x = self.relu(x)
-
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.relu(x)
-
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
-        x = self.block4(x)
-        x = self.block5(x)
-        x = self.block6(x)
-        x = self.block7(x)
-        x = self.block8(x)
-        x = self.block9(x)
-        x = self.block10(x)
-        x = self.block11(x)
-        x = self.block12(x)
-
-        x = self.conv3(x)
-        x = self.bn3(x)
-        x = self.relu(x)
-
-        conv4_x = self.conv4(x)
-        x = self.bn4(conv4_x)
-        return x, conv4_x
-
-    def logits(self, features):
-        x = self.relu(features)
-
-        x = F.adaptive_avg_pool2d(x, (1, 1))
-        x = x.view(x.size(0), -1)
-        x = self.last_linear(x)
-        return x
-
-    def forward(self, input):
-        #x = self.features(input)
-        x, conv4_x = self.features(input)
-        x = self.logits(x)
-        #x = self.logits(x)
-        return x, conv4_x
-        '''
-
 
 def xception(num_classes=1000, pretrained='imagenet'):
     model = Xception(num_classes=num_classes)

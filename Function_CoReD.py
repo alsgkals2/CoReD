@@ -62,6 +62,7 @@ def GetSplitLoadersRealFake(list_correct,dataset,train_aug=None,num_store_per=5)
     return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target),save_ceckpoint_for_unlearning
 
 def GetListTeacherFeatureFakeReal(model, loader,mode='X',showScatter = False):
+    
     list_features = [[],[]]
     maxpool = nn.MaxPool2d(4)
     model.eval()
