@@ -2,9 +2,13 @@
     
 **(Accepted for oral presentation at [ACMMM '21](https://2021.acmmm.org/))**
 
-Paper Link: ([arXiv](https://arxiv.org/abs/2107.02408)) (ACMMM version (soon))
+Paper Link: ([arXiv](https://arxiv.org/abs/2107.02408)) (ACMMM version)
 <p align="center">
 <img src="imgs/Overview.PNG" alt="CLRNet-pipeline" border="0" width="600">
+    
+<p align="center">
+<img src="imgs/CoReD - Pipeline.png" alt="CLRNet-pipeline" border="0" width="800">
+
 
 
 ## Overview
@@ -40,14 +44,15 @@ pip install -r requirements.txt
 ### - Full Usages
 
 ```console
-  -m                   Model name = ['CoReD','KD','TG','FT']
-  -te                  Turn on test mode True/False
-  -s                   Name of 'Source' datasets. one or multiple names. (ex. DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap)
-  -t                   Name of 'Target' dataset. only a single name. (ex.DeepFake / Face2Face / FaceSwap / NeuralTextures) / used for Train only')
-  -folder1             Sub-name of folder in Save path when model save
-  -folder2             'name of folder that will be made in folder1 (just option)'
-  -d                   Folder of path must contains Sources & Target folder names
-  -w                   You can select the full path or folder path included in the '.pth' file
+  -m                   Model name = [CoReD, KD, TG, FT]
+  -n                   Network name = [Xception, Efficient']
+  -te                  Turn on test mode [True, False]
+    
+  --name_sources       Name of 'Source' datasets. one or multiple names. (ex. DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap)
+  --name_target        Name of 'Target' dataset. only a single name. (ex.DeepFake / Face2Face / FaceSwap / NeuralTextures) / used for Train only')
+  --path_data          Dataset path. it must be contained Sources & Target folder name
+  --path_preweight     You can select the full path or folder path included in the '.pth' file
+    
   -lr                  Learning late (For training)
   -a                   Alpha of KD-Loss
   -nc                  Number of Classes
@@ -78,7 +83,7 @@ To train and evaluate the model(s) in the paper, run this command:
 After train the model, you can evaluate the dataset.  
 - **Eval**    
     ```EVAL
-    python main.py -d= -w={weights} --test  
+    python main.py -d={dataset as full name} -w={weights} --test  
     python main.py -d=./mydrive/dataset/DeepFake/testset -w=./weights/bestmodel.pth --test #Example
     ```    
 
