@@ -197,13 +197,13 @@ def Make_DataLoader(dir,
                                         pin_memory=True
                                         )
 
-        loader_test = DataLoader(datasets.ImageFolder(dir, val_aug),
-                                                batch_size=batch_size,
-                                                shuffle=False,
-                                                num_workers=4,
-                                                pin_memory=True
-                                                )
-        dic = {'test_dataset':loader_test}
+        # loader_test = DataLoader(datasets.ImageFolder(dir, val_aug),
+        #                                         batch_size=batch_size,
+        #                                         shuffle=False,
+        #                                         num_workers=4,
+        #                                         pin_memory=True
+        #                                         )
+        dic = {'test_dataset':train_target_loader}
 
     return dic, dic_CoReD
 
