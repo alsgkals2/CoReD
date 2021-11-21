@@ -4,10 +4,10 @@
 
 Paper Link: ([arXiv](https://arxiv.org/abs/2107.02408)) (ACMMM version)
 <p align="center">
-<img src="imgs/Overview.PNG" alt="CLRNet-pipeline" border="0" width="600">
+<img src="imgs/Overview.PNG" alt="overview" border="0" width="600">
     
 <p align="center">
-<img src="imgs/CoReD - Pipeline.png" alt="CLRNet-pipeline" border="0" width="800">
+<img src="imgs/CoReD_Pipeline.png" alt="CLRNet-pipeline" border="0" width="800">
 
 
 
