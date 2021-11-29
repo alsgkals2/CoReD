@@ -29,7 +29,7 @@ torchvision==0.9.1
 torch==1.8.1  
 sklearn  
 numpy  
-opencv_python  
+opencv-python  
 
 ```console
 pip install -r requirements.txt
