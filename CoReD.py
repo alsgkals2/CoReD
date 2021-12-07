@@ -20,7 +20,7 @@ def Train(args):
     print('num_store_per is ',num_store_per)
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    teacher_model, student_model = load_models(args.path_preweight, args.name_sources)
+    teacher_model, student_model = load_models(args.path_preweight, args.network)
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
