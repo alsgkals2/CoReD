@@ -40,7 +40,7 @@ def GetSplitLoaders_BinaryClasses(list_correct,dataset,train_aug=None,num_store_
                                      batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True))
     
     list_length_realfakeloader = [[len(j.dataset) if j else 0 for j in i] for i in correct_loader]
-    print(list_length_realfakeloader)
+    print("list_length_realfakeloader :", list_length_realfakeloader)
     return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target)
 
 def GetSplitLoadersRealFake(list_correct,dataset,train_aug=None,num_store_per=5):

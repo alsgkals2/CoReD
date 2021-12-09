@@ -4,22 +4,20 @@ import numpy as np
 import torch
 import torch.nn as nn
 import tqdm
-import shutil
 import random
 from torch.nn import functional as F
-import torch.optim as optim
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.datasets as datasets
 from sklearn.metrics import classification_report
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score
+from collections import OrderedDict
 from PIL import Image
 import xception_origin
 from EfficientNet import *
+import copy
+import tqdm
 
 def set_seeds(seed=2020):
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -84,14 +82,47 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-        
-def save_checkpoint(state, checkpoint,
-                    best_filename = 'student_model_best_acc.pt',
-                    isAcc=False
-                    ):
-    if isAcc:
-        torch.save(state, os.path.join(checkpoint,best_filename))
-     
+
+
+def initialization(args):
+    print('GPU num is' , args.num_gpu)
+    os.environ['CUDA_VISIBLE_DEVICES'] =str(args.num_gpu)
+    set_seeds()
+    # dict_source = {}
+    dict_source = OrderedDict()
+    name_sources = args.name_sources
+    name_target = args.name_target
+    path_data = args.data
+    if not '_' in name_sources : dict_source['source'] = name_sources #TASK 0
+    else: #TASK 1 ~
+        temp = name_sources.split('_')
+        cnt=1
+        for _name in temp:
+            dict_source[f'source{cnt}'] = _name
+            print(f'Source Name : {_name}')
+            cnt+=1
+    if name_target : print('Target Name : ',name_target)
+
+    #train & valid
+    train_aug, val_aug = get_augs()
+    if '_' not in name_sources: #Task1 (pre-train before continual learning) or Test mode
+        print(path_data, dict_source['source'])
+        dicLoader,dicCoReD = Make_DataLoader(path_data, dict_source['source'],
+                                            name_target, train_aug=train_aug, val_aug=val_aug,
+                                            mode_CoReD=True, batch_size=args.batch_size,
+                                            TRAIN_MODE=not args.test, MODE_BALANCED_DATA=False)
+    else: #Task2-4 (continual learning)
+        print('===> Making Loader for Continual Learning..')
+        dicLoader,dicCoReD = Make_DataLoader_continual(path_data, name_source=dict_source,
+                                                    name_target=name_target,
+                                                    train_aug=train_aug,
+                                                    val_aug=val_aug,
+                                                    mode_CoReD=True,
+                                                    batch_size=args.batch_size,
+                                                    TRAIN_MODE=not args.test)
+    return dicLoader, dicCoReD, dict_source
+    
+
 def Make_DataLoader(dir,
                     name_source,
                     name_target,
@@ -191,13 +222,6 @@ def Make_DataLoader(dir,
                                         num_workers=8,
                                         pin_memory=True
                                         )
-
-        # loader_test = DataLoader(datasets.ImageFolder(dir, val_aug),
-        #                                         batch_size=batch_size,
-        #                                         shuffle=False,
-        #                                         num_workers=4,
-        #                                         pin_memory=True
-        #                                         )
         dic = {'test_dataset':train_target_loader}
 
     return dic, dic_CoReD
@@ -206,9 +230,9 @@ def Make_DataLoader_continual(dir,
                               name_source,
                               name_target,
                               name_mixed_folder='',
+                              mode_CoReD = True,
                               train_aug=None,
                               val_aug=None,
-                              mode_CoReD = False,
                               batch_size=128,
                               TRAIN_MODE = True
                               ):
@@ -216,53 +240,35 @@ def Make_DataLoader_continual(dir,
     #For Validataion
     val_target_loader_mixed=None
     val_target_dir_MIXED = ''
-    source_dataset = os.path.join(dir,name_source['source'])
+    source_dataset=[]
+    val_source_dir = []
+    for _item in name_source:
+        source_dataset.append(os.path.join(dir,name_source[_item]))
+        val_source_dir.append(os.path.join(source_dataset[-1], 'val'))
+
     target_dataset = os.path.join(dir,name_target)
-    val_source_dir = os.path.join(source_dataset, 'val')
     val_target_dir = os.path.join(target_dataset, 'val')
-
-    val_source_dir2, val_source_dir3 = None,None
-    if 'source2' in name_source:
-        source_dataset2 = os.path.join(dir,name_source['source2'])
-        val_source_dir2 = os.path.join(source_dataset2, 'val')
-    if 'source3' in name_source:
-        source_dataset3 = os.path.join(dir,name_source['source3'])
-        val_source_dir3 = os.path.join(source_dataset3, 'val')
-
     #check the paths
     if name_mixed_folder :
         target_dataset_mix = os.path.join(dir.replace('CLRNet_jpg25', ''), name_target)
-        val_target_dir = os.path.join(target_dataset, 'val')
         val_target_dir_MIXED = os.path.join(target_dataset_mix,'val')
 
     print("DATASET PATHS")
-    print('val_source_dir ' ,val_source_dir); print('val_source_dir2 ',val_source_dir2 if val_source_dir2 else 'NONE'); print('val_source_dir3 ',val_source_dir3 if val_source_dir3 else 'NONE');
+    print('val_source_dir ' ,val_source_dir)
     print('val_target_dir ' ,val_target_dir)
     print('train_dir ' ,train_dir)
-    val_source_loader2, val_source_loader3 = None,None
-    val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
-                                batch_size=batch_size,
-                                shuffle=False,
-                                num_workers=4,
-                                pin_memory=True
-                                )
-
-    if val_source_dir2:
-        print('val_source_dir2 ',val_source_dir2)
-        val_source_loader2 = DataLoader(datasets.ImageFolder(val_source_dir2, val_aug),
-                                        batch_size=batch_size,
-                                        shuffle=False,
-                                        num_workers=4,
-                                        pin_memory=True
-                                        )
-    if val_source_dir3:
-        print('val_source_dir3 ',val_source_dir3)
-        val_source_loader3 = DataLoader(datasets.ImageFolder(val_source_dir3, val_aug),
-                                        batch_size=batch_size,
-                                        shuffle=False,
-                                        num_workers=4,
-                                        pin_memory=True
-                                        )
+    val_source_loader = []
+    cnt = 1
+    NUM_WORKIER = 12
+    for dir in val_source_dir:
+            print('===> Making Loader :', dir)
+            _loader = DataLoader(datasets.ImageFolder(dir, val_aug),
+                                            batch_size=batch_size,
+                                            shuffle=False,
+                                            num_workers=NUM_WORKIER,
+                                            pin_memory=True
+                                            )
+            val_source_loader.append(copy.deepcopy(_loader))
     if TRAIN_MODE:
         train_target_loader, train_target_loader_forcorrect = None,None
         train_target_dataset = datasets.ImageFolder(train_dir,transform=None)
@@ -270,21 +276,22 @@ def Make_DataLoader_continual(dir,
         train_target_loader = DataLoader(train_target_dataset,
                                         batch_size=batch_size,
                                         shuffle=True,
-                                        num_workers=4,
+                                        num_workers=NUM_WORKIER,
                                         pin_memory=True
                                         )
-        assert (os.path.exists(train_dir) and os.path.exists(val_source_dir) and os.path.exists(val_target_dir),'Check PTAH !!!')
+        assert (os.path.exists(train_dir) and os.path.exists(val_source_dir[0]) and os.path.exists(val_target_dir),'Check PTAH !!!')
+
         if mode_CoReD : train_target_loader_forcorrect = DataLoader(train_target_dataset,
                                                                     batch_size=batch_size,
                                                                     shuffle=False,
-                                                                    num_workers=4,
+                                                                    num_workers=NUM_WORKIER,
                                                                     pin_memory=True
                                                                     )
 
         val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                     batch_size=batch_size,
                                     shuffle=False,
-                                    num_workers=4,
+                                    num_workers=NUM_WORKIER,
                                     pin_memory=True
                                     )
             
@@ -292,18 +299,201 @@ def Make_DataLoader_continual(dir,
             val_target_loader_mixed = DataLoader(datasets.ImageFolder(val_target_dir_MIXED, val_aug),
                                                 batch_size=batch_size,
                                                 shuffle=False,
-                                                num_workers=4,
+                                                num_workers=NUM_WORKIER,
                                                 pin_memory=True
                                                 )
-        dic = {'train_target':train_target_loader,'val_source':val_source_loader,'val_source2':val_source_loader2,'val_source3':val_source_loader3,'val_target':val_target_loader,'val_target_mix':val_target_loader_mixed}
+        dic = OrderedDict()
+        dic['train_target'] = train_target_loader;
+        dic['val_target'] = val_target_loader
+        if val_target_loader_mixed : dic['val_target_mix'] = val_target_loader_mixed
+
+        for _loader in val_source_loader:
+            dic[f'val_dataset{cnt}'] = _loader
+            cnt += 1
         dic_CoReD = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
     else:
-        dic = {'test_dataset':val_source_loader}
-        if val_source_dir2 : dic['test_dataset2'] = val_source_loader2
-        if val_source_dir3 : dic['test_dataset3'] = val_source_loader3
+        dic = OrderedDict()
+        for _loader in val_source_loader:
+            dic[f'test_dataset{cnt}'] = _loader
+            cnt += 1
         dic_CoReD = None
     return dic, dic_CoReD
 
+def Test_PRF(test_loader, model, criterion, log=None): # precision/recall/f1-score
+    losses = AverageMeter()
+    acc_real = AverageMeter()
+    acc_fake = AverageMeter()
+    sum_of_AUROC=[]
+    target=[]
+    output = []
+
+    y_true=np.zeros((0,2),dtype=np.int8)
+    y_pred=np.zeros((0,2),dtype=np.int8)
+    print(len(test_loader.dataset))
+    with torch.no_grad():
+        model.eval()
+        model.cuda()
+        for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(test_loader)):
+            inputs, targets = inputs.cuda(),torch.from_array(np.array(targets)).cuda()
+            
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            _, predicted = torch.max(outputs, 1)
+            c = (predicted == targets).squeeze()
+            _y_pred = outputs.cpu().detach()
+            _y_gt = targets.cpu().detach().numpy()
+            acc = [0, 0]
+            class_total = [0, 0]
+            for i in range(len(targets)):
+                label = targets[i]
+                acc[label] += 1 if c[i].item() == True else 0
+                class_total[label] += 1
+
+            losses.update(loss.data.tolist(), inputs.size(0))
+            if (class_total[0] != 0):
+                acc_real.update(acc[0] / class_total[0])
+            if (class_total[1] != 0):
+                acc_fake.update(acc[1] / class_total[1])
+ 
+            target.append(_y_gt)
+            output.append(_y_pred.numpy()[:,1])
+            auroc=None
+            try:
+                auroc = roc_auc_score(_y_gt, outputs[:,1].cpu().detach().numpy())
+            except ValueError:
+                pass
+            sum_of_AUROC.append(auroc)
+            _y_true = np.array(torch.zeros(targets.shape[0],2), dtype=np.int8)
+            _y_gt = _y_gt.astype(int)
+            for _ in range(len(targets)):
+                _y_true[_][_y_gt[_]] = 1
+            y_true = np.concatenate((y_true,_y_true))
+            a = _y_pred.argmax(1)
+            _y_pred = np.array(torch.zeros(_y_pred.shape).scatter(1, a.unsqueeze(1), 1),dtype=np.int8)
+            y_pred = np.concatenate((y_pred,_y_pred))
+        result = classification_report(y_true, y_pred, labels=None, target_names=None, sample_weight=None, digits=4, output_dict=False, zero_division='warn')
+        print(result)
+    
+def Test(val_loader, model, criterion, log = None, source_name = ''): #Accuracy
+    print(f'===> Starting the dataset {source_name}' if source_name else '===> Starting TEST')
+    global best_acc
+    correct, total =0,0
+    losses = AverageMeter()
+    arc = AverageMeter()
+    main_losses = AverageMeter()
+    model.eval()
+    model.cuda()
+    
+    with torch.no_grad():
+        model.eval()
+        for (inputs, targets) in tqdm.tqdm(val_loader):
+            inputs, targets = inputs.to('cuda'), targets.to('cuda')
+            outputs = model(inputs)
+            loss_main = criterion(outputs, targets)
+            loss = loss_main
+            _, predicted = torch.max(outputs, 1)
+            correct += (predicted == targets).sum().item()
+            total += len(targets)
+            losses.update(loss.data.tolist(), inputs.size(0))
+            main_losses.update(loss_main.tolist(), inputs.size(0))
+        if log:
+            log.write('Test | Loss:{loss:.4f} | MainLoss:{main:.4f} | top:{top:.4f}'.format(loss=losses.avg, main=main_losses.avg, top = correct/total*100)+ ' \n')
+        else: 
+            print('Test | Loss:{loss:.4f} | MainLoss:{main:.4f} | top:{top:.4f}'.format(loss=losses.avg, main=main_losses.avg, top = correct/total*100))
+    return (losses.avg, arc.avg, correct/total*100)
+
+def Eval(args, log = None,ok_PRF = False):
+    dicLoader,_, dicSourceName = initialization(args)
+    model_list=[]
+    weight_path = args.weigiht
+
+    #if weight_path is not file type
+    if os.path.isdir(weight_path): 
+        for a,b,c in os.walk(weight_path):
+            for _c in c:
+                if 'epoch_.pth.tar' in _c: # you can change according to need
+                    fullpath = os.path.join(a,_c)
+                    model_list.append(fullpath)
+    elif os.path.isfile(weight_path):
+        model_list.append(weight_path)
+    else: return None
+    
+    print(f'Loading BAKBONE MODEL {args.network} ...')
+    for model_item in model_list:
+        _, student_model = load_models(model_item, args.network, not args.test)
+        criterion = nn.CrossEntropyLoss().cuda()
+
+        for _key, _name in zip(dicLoader, dicSourceName):
+            print("_key ===> ", _key)
+            Test(dicLoader[_key], student_model, criterion, log, dicSourceName[_name])
+        if ok_PRF: Test_PRF(dicLoader['test_dataset'], student_model, criterion, log)
+
+
+def loss_fn_kd(outputs, labels, teacher_outputs, KD_T=20, KD_alpha=0.5):
+    KD_loss = nn.KLDivLoss(reduction='batchmean')(F.log_softmax(outputs/KD_T,dim=1),
+                             F.softmax(teacher_outputs/KD_T,dim=1) * KD_alpha*KD_T*KD_T) +\
+        F.cross_entropy(outputs, labels) * (1. - KD_alpha)
+    return KD_loss
+
+def get_augs():
+    train_aug = transforms.Compose([
+        transforms.Resize((128,128)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
+    ])
+
+    val_aug = transforms.Compose([
+        transforms.Resize((128,128)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
+    ])
+
+    return train_aug, val_aug
+
+
+def load_models(weigiht, nameNet, TrainMode=True):
+    teacher_model, student_model = None,None
+    if weigiht:
+        checkpoint = None
+        print(weigiht)
+
+        if os.path.isdir(weigiht):
+            checkpoint =torch.load(weigiht+'/model_best_accuracy.pth.tar')
+        elif os.path.isfile(weigiht):
+            checkpoint = torch.load(weigiht)
+        else:
+            print("preweight is not exist !")
+
+    if nameNet=='Xception':
+        teacher_model = xception_origin.xception(num_classes=2, pretrained='')
+        student_model = xception_origin.xception(num_classes=2, pretrained='')
+    elif nameNet=='Efficient':
+        teacher_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
+        student_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
+
+    if TrainMode:
+        teacher_model.load_state_dict(checkpoint['state_dict'])
+        student_model.load_state_dict(checkpoint['state_dict'])
+        teacher_model.eval(); teacher_model.to('cuda')
+        student_model.train();
+    else:
+        student_model.load_state_dict(checkpoint['state_dict'])
+        student_model.eval();
+    student_model.cuda()
+
+    return teacher_model, student_model
+
+def save_checkpoint(state, checkpoint, filename='checkpoint.pth.tar' , AUC_BEST = False, ACC_BEST = False):
+    name_save= filename if filename else ''
+    if AUC_BEST : name_save = 'model_best_auc'
+    if ACC_BEST : name_save = 'model_best_accuracy'
+
+    filepath = os.path.join(checkpoint, name_save+'.pth.tar')
+    os.makedirs(os.path.dirname(filepath),exist_ok=True)
+    torch.save(state, filepath)
+
+#weill be refectored
 def Make_DataLoader_together(rootpath_dataset,
                             name_source,
                             name_target,
@@ -380,219 +570,3 @@ def Make_DataLoader_together(rootpath_dataset,
     dic_CoReD = {'train_target_dataset': train_target_dataset,
                   'train_target_forCorrect': train_target_loader_forcorrect}
     return dic, dic_CoReD
-
-
-def Test_PRF(test_loader, model, criterion, log=None): # precision/recall/f1-score
-    losses = AverageMeter()
-    acc_real = AverageMeter()
-    acc_fake = AverageMeter()
-    sum_of_AUROC=[]
-    target=[]
-    output = []
-
-    y_true=np.zeros((0,2),dtype=np.int8)
-    y_pred=np.zeros((0,2),dtype=np.int8)
-    print(len(test_loader.dataset))
-    with torch.no_grad():
-        model.eval()
-        model.cuda()
-        for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(test_loader)):
-            inputs, targets = inputs.cuda(),torch.from_array(np.array(targets)).cuda()
-            
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            _, predicted = torch.max(outputs, 1)
-            c = (predicted == targets).squeeze()
-            _y_pred = outputs.cpu().detach()
-            _y_gt = targets.cpu().detach().numpy()
-            acc = [0, 0]
-            class_total = [0, 0]
-            for i in range(len(targets)):
-                label = targets[i]
-                acc[label] += 1 if c[i].item() == True else 0
-                class_total[label] += 1
-
-            losses.update(loss.data.tolist(), inputs.size(0))
-            if (class_total[0] != 0):
-                acc_real.update(acc[0] / class_total[0])
-            if (class_total[1] != 0):
-                acc_fake.update(acc[1] / class_total[1])
- 
-            target.append(_y_gt)
-            output.append(_y_pred.numpy()[:,1])
-            auroc=None
-            try:
-                auroc = roc_auc_score(_y_gt, outputs[:,1].cpu().detach().numpy())
-            except ValueError:
-                pass
-            sum_of_AUROC.append(auroc)
-            _y_true = np.array(torch.zeros(targets.shape[0],2), dtype=np.int8)
-            _y_gt = _y_gt.astype(int)
-            for _ in range(len(targets)):
-                _y_true[_][_y_gt[_]] = 1
-            y_true = np.concatenate((y_true,_y_true))
-            a = _y_pred.argmax(1)
-            _y_pred = np.array(torch.zeros(_y_pred.shape).scatter(1, a.unsqueeze(1), 1),dtype=np.int8)
-            y_pred = np.concatenate((y_pred,_y_pred))
-        result = classification_report(y_true, y_pred, labels=None, target_names=None, sample_weight=None, digits=4, output_dict=False, zero_division='warn')
-        print(result)
-    
-def Test(val_loader, model, criterion, log = None, source_name = ''): #Accuracy
-    print(f'===> Starting the dataset {source_name}' if source_name else '===> Starting TEST')
-    global best_acc
-    correct, total =0,0
-    losses = AverageMeter()
-    arc = AverageMeter()
-    main_losses = AverageMeter()
-    model.eval()
-    model.cuda()
-    
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(val_loader):
-            # inputs, targets = inputs.to('cuda'), targets.to('cuda')
-            inputs = inputs.clone().detach().cuda()
-            # print(type(targets))
-            # print(targets)
-            targets = torch.tensor(targets.clone().detach()).cuda()
-            outputs = model(inputs)
-            loss_main = criterion(outputs, targets)
-            loss = loss_main
-            _, predicted = torch.max(outputs, 1)
-            correct += (predicted == targets).sum().item()
-            total += len(targets)
-            losses.update(loss.data.tolist(), inputs.size(0))
-            main_losses.update(loss_main.tolist(), inputs.size(0))
-        if log:
-            log.write('Test | Loss:{loss:.4f} | MainLoss:{main:.4f} | top:{top:.4f}'.format(loss=losses.avg, main=main_losses.avg, top = correct/total*100)+ ' \n')
-        else: 
-            print('Test | Loss:{loss:.4f} | MainLoss:{main:.4f} | top:{top:.4f}'.format(loss=losses.avg, main=main_losses.avg, top = correct/total*100))
-    return (losses.avg, arc.avg, correct/total*100)
-
-def Eval(args,log,ok_PRF = False):
-    dicLoader,_, dicSourceName = initialization(args)
-    model_list=[]
-    weight_path = args.path_preweight
-
-    #if weight_path is not file type
-    if os.path.isdir(weight_path): 
-        for a,b,c in os.walk(weight_path):
-            for _c in c:
-                if 'epoch_.pth.tar' in _c: # you can change according to need
-                    fullpath = os.path.join(a,_c)
-                    model_list.append(fullpath)
-    elif os.path.isfile(weight_path):
-        model_list.append(weight_path)
-    else: return None
-    
-    print(f'Loading BAKBONE MODEL {args.network} ...')
-    for model_item in model_list:
-        _, student_model = load_models(model_item, args.network, not args.test)
-        criterion = nn.CrossEntropyLoss().cuda()
-        for _key, _name in zip(dicLoader, dicSourceName):
-            Test(dicLoader[_key], student_model, criterion, log, dicSourceName[_name])
-        if ok_PRF: Test_PRF(dicLoader['test_dataset'], student_model, criterion, log)
-
-def loss_fn_kd(outputs, labels, teacher_outputs, KD_T=20, KD_alpha=0.5):
-    KD_loss = nn.KLDivLoss(reduction='batchmean')(F.log_softmax(outputs/KD_T,dim=1),
-                             F.softmax(teacher_outputs/KD_T,dim=1) * KD_alpha*KD_T*KD_T) +\
-        F.cross_entropy(outputs, labels) * (1. - KD_alpha)
-    return KD_loss
-
-def get_augs():
-    train_aug = transforms.Compose([
-        transforms.Resize((128,128)),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
-    ])
-
-    val_aug = transforms.Compose([
-        transforms.Resize((128,128)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]),
-    ])
-
-    return train_aug, val_aug
-
-
-def load_models(path_preweight, nameNet, TrainMode=True):
-    teacher_model, student_model = None,None
-    if path_preweight:
-        # path_preweight = os.path.join(path_preweight,name_sources)
-        checkpoint = None
-        if os.path.isdir(path_preweight):
-            checkpoint =torch.load(path_preweight+'/model_best_accuracy.pth.tar')
-        elif os.path.isfile(path_preweight):
-            checkpoint = torch.load(path_preweight)
-        else:
-            print("preweight is not exist !")
-
-    if nameNet=='Xception':
-        teacher_model = xception_origin.xception(num_classes=2, pretrained='')
-        student_model = xception_origin.xception(num_classes=2, pretrained='')
-    elif nameNet=='Efficient':
-        teacher_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
-        student_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
-
-    if TrainMode:
-        teacher_model.load_state_dict(checkpoint['state_dict'])
-        teacher_model.eval(); teacher_model.cuda()
-        student_model.train();
-    else:
-        student_model.load_state_dict(checkpoint['state_dict'])
-        student_model.eval();
-    student_model.cuda()
-
-    return teacher_model, student_model
-
-def save_checkpoint(state, checkpoint='checkpoint', filename='checkpoint.pth.tar' , AUC_BEST = False, ACC_BEST = False):
-    name_save = ''
-    filepath = os.path.join(checkpoint, filename)
-    torch.save(state, filepath)
-    if AUC_BEST :
-        name_save = 'model_best.pth.tar'
-        shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
-    if ACC_BEST :
-        name_save = 'model_best_accuracy.pth.tar'
-        shutil.copyfile(filepath, os.path.join(checkpoint, name_save))
-
-def initialization(args):
-    print('GPU num is' , args.num_gpu)
-    os.environ['CUDA_VISIBLE_DEVICES'] =str(args.num_gpu)
-    set_seeds()
-    dict_source = {}
-    name_sources = args.name_sources
-    name_target = args.name_target
-    path_data = args.path_data
-    dict_source['source']= name_sources
-    if '_' in name_sources:
-        temp = name_sources.split('_')
-        dict_source['source'] = temp[0]
-        dict_source['source2'] = temp[1]
-        try:
-            dict_source['source3'] = temp[2]
-        except:
-            print('source3 is empty')
-
-    if 'source2' in dict_source : print('source2 : ',dict_source['source2'])
-    if 'source3' in dict_source: print('source3 :',dict_source['source3'])
-    if name_target : print('target : ',name_target)
-
-    #train & valid
-    train_aug, val_aug = get_augs()
-    if '_' not in name_sources: #Task1 (pre-train before continual learning) or Test mode
-        print(path_data, dict_source['source'])
-        dicLoader,dicCoReD = Make_DataLoader(path_data, dict_source['source'],
-                                            name_target, train_aug=train_aug, val_aug=val_aug,
-                                            mode_CoReD=True, batch_size=args.batch_size,
-                                            TRAIN_MODE=not args.test, MODE_BALANCED_DATA=False)
-    else: #Task2-4 (continual learning)
-        dicLoader,dicCoReD = Make_DataLoader_continual(path_data, name_source=dict_source,
-                                                    name_target=name_target,
-                                                    train_aug=train_aug,
-                                                    val_aug=val_aug,
-                                                    mode_CoReD=True,
-                                                    batch_size=args.batch_size,
-                                                    TRAIN_MODE=not args.test)
-    return dicLoader, dicCoReD, dict_source
-    

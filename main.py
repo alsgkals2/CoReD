@@ -9,19 +9,17 @@ import argparse
 from Function_common import Eval
 import Logger
 import os
-# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch CONTINUAL LEARNING')
     parser.add_argument('--model', '-m', type=str, default='CoReD',choices=['CoReD','KD','TG','FT'], help='Choose the one of [CoReD, KD, TG, FT]')
     parser.add_argument('--network', '-n', type=str, default='Xception',choices=['Xception','Efficient'], help='Choose the one of [Xception, Efficient]')
     parser.add_argument('--test', '-te', help="turn on test mode", action="store_true")
-    parser.add_argument('--name_sources', '-s', type=str, default='DeepFake', help='name of sources(more than one)(ex.DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap) / used for Testset folder as well')
-    parser.add_argument('--name_target', '-t', type=str, default='', help='name of target(only one)(ex.DeepFake / Face2Face / FaceSwap) / used for Train only')
-    parser.add_argument('--name_saved_folder1', '-folder1', type=str, default='CoReD', help='name of folder that will be made')
-    parser.add_argument('--name_saved_folder2', '-folder2', type=str, default='', help='name of folder that will be made in folder1 (just option)')
-    parser.add_argument('--path_data', '-d',type=str, default='./data/DeepFake', help='the folder of path must contains Sources & Target folder names')
-    parser.add_argument('--path_preweight', '-w', '-path', type=str, default='', help='You can select the full path or folder path included in the file \'.pth\'')
+    parser.add_argument('--name_sources', '-s', type=str, default='Face2Face_NeuralTextures_DeepFake', help='name of sources(more than one)(ex.DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap) / used for Testset folder as well')
+    parser.add_argument('--name_target', '-t', type=str, default='FaceSwap', help='name of target(only one)(ex.DeepFake / Face2Face / FaceSwap) / used for Train only')
+    parser.add_argument('--name_folder1', '-folder1', type=str, default='CoReD', help='name of folder that will be made')
+    parser.add_argument('--name_folder2', '-folder2', type=str, default='AVCeleb', help='name of folder that will be made in folder1 (just option)')
+    parser.add_argument('--data', '-d',type=str, default='/media/data1/mhkim/CLRNet', help='the folder of path must contains Sources & Target folder names')
+    parser.add_argument('--weigiht', '-w', '-path', type=str, default='', help='You can select the full path or folder path included in the file \'.pth\'')
 
     parser.add_argument('--lr', '-l', type=float, default=0.05, help='initial learning rate')
     parser.add_argument('--KD_alpha', '-a', type=float, default=0.5, help='KD alpha')
@@ -31,6 +29,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', '-nb', type=int, default=128, help='batch size')
     parser.add_argument('--num_gpu', '-ng', type=str, default='2', help='excuted gpu number')
     args = parser.parse_args()
+
+    log = Logger.Logger()
+    args.folder_weight = f'./weights/{args.name_sources}_{args.name_target}/{args.name_folder1}/{args.name_folder2}/'
+    log_dir = f'{args.folder_weight}/log'
+    os.makedirs(log_dir, exist_ok=True)
 
     if not args.test:
         if args.model == 'CoReD':
@@ -46,14 +49,15 @@ if __name__ == '__main__':
         else:
             print("CAN NOT EXCUTE !")
             exit()
-        run_module.Train(args)
-    else:
-        log = Logger.Logger()
-        folder_weight = os.path.basename(args.path_preweight)
-        log_dir = '{folder_weight}/log'
-        name_file = '[EVAL]result_eval_FakeAVCeleb.txt'
-        os.makedirs(log_dir, exist_ok=True)
-        log.open(os.path.join(log_dir,name_file), mode='a')
+        # Train(args)
+        name_file = '[Train]result_eval_FakeAVCeleb.txt'
+        log.open(os.path.join(log_dir,name_file), mode='w')
         log.write('\n')
-        log.write(f'TEST MODE | WEIGHT FILE : {args.path_preweight} \n')
+        run_module.Train(args, log)
+    else:
+        name_file = '[EVAL]result_eval_FakeAVCeleb.txt'
+        log.open(os.path.join(log_dir,name_file), mode='w')
+        log.write('\n')
+        log.write(' ---------------- EVAL ---------------- ')
+        log.write(f'TEST MODE | WEIGHT FILE : {args.weigiht} \n')
         Eval(args, log)

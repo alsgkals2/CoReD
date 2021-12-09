@@ -50,8 +50,8 @@ pip install -r requirements.txt
     
   --name_sources       Name of 'Source' datasets. one or multiple names. (ex. DeepFake / DeepFake_Face2Face / DeepFake_Face2Face_FaceSwap)
   --name_target        Name of 'Target' dataset. only a single name. (ex.DeepFake / Face2Face / FaceSwap / NeuralTextures) / used for Train only')
-  --path_data          Dataset path. it must be contained Sources & Target folder name
-  --path_preweight     You can select the full path or folder path included in the '.pth' file
+  --data          Dataset path. it must be contained Sources & Target folder name
+  --weigiht     You can select the full path or folder path included in the '.pth' file
     
   -lr                  Learning late (For training)
   -a                   Alpha of KD-Loss
