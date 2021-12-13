@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 def Train(args, log = None):
+    device = 'cuda' if args.num_gpu else 'cpu'
     lr = args.lr
     KD_alpha = args.KD_alpha
     num_class = args.num_class
@@ -18,16 +19,15 @@ def Train(args, log = None):
     print('num_store_per is ',num_store_per)
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    teacher_model, student_model = load_models(args.weigiht, args.network)#, args.test)
-    student_model.train()
-    criterion = nn.CrossEntropyLoss().cuda()
+    teacher_model, student_model = load_models(args.weigiht, args.network, num_gpu = args.num_gpu)#, args.test)    criterion = nn.CrossEntropyLoss().to(device)
+    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
-    _list_correct = func_correct(teacher_model.cuda(),dicCoReD['train_target_forCorrect'])
+    _list_correct = func_correct(teacher_model.to(device),dicCoReD['train_target_forCorrect'])
     _correct_loaders, _ = GetSplitLoaders_BinaryClasses(_list_correct, dicCoReD['train_target_dataset'], get_augs()[0], num_store_per)
             
     # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
-    list_features = GetListTeacherFeatureFakeReal(teacher_model,_correct_loaders)
+    list_features = GetListTeacherFeatureFakeReal(teacher_model.module if ',' in args.num_gpu else teacher_model ,_correct_loaders, mode=args.network)
     list_features = np.array(list_features)
 
     best_acc,epochs=0, args.epochs
@@ -42,11 +42,11 @@ def Train(args, log = None):
         teacher_model.eval()
         student_model.train()
         for(inputs, targets) in tqdm(dicLoader['train_target']):
-            inputs, targets = inputs.cuda(), targets.cuda()
+            inputs, targets = inputs.to(device), targets.to(device)
             sne_loss = None
             r = np.random.rand(1)
             if r > 0.8:
-                rand_index = torch.randperm(inputs.size()[0]).cuda()
+                rand_index = torch.randperm(inputs.size()[0]).to(device)
                 tt = targets[rand_index]
                 boolean = targets != tt #THIS IS ALWAYS ATTACHING THE OPPOSITED THE 'SMALL PIECE OF A DATA'
                 if True in boolean:
@@ -55,7 +55,7 @@ def Train(args, log = None):
                     bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
                     inputs[boolean, :, bbx1:bbx2, bby1:bby2] = inputs[rand_index, :, bbx1:bbx2, bby1:bby2]
 
-            correct_loader_std,_ = correct_binary(student_model.cuda(), inputs, targets)
+            correct_loader_std,_ = correct_binary(student_model.module if ',' in args.num_gpu else student_model, inputs, targets)
             
             list_features_std = []
             [list_features_std.append([]) for i in range(args.num_class)]
@@ -64,10 +64,10 @@ def Train(args, log = None):
             with autocast(enabled=True):
                 for j in range(num_store_per):
                     for i in range(num_class):
-                        feat = GetFeatureMaxpool(student_model,correct_loader_std[j][i])
+                        feat = GetFeatureMaxpool(student_model.module if ',' in args.num_gpu else student_model,correct_loader_std[j][i])
                         if(list_features[i][j]==0):continue
-                        feat = feat-torch.tensor(list_features[i][j]).cuda()
-                        feat = torch.pow(feat.cuda(),2)
+                        feat = feat-torch.tensor(list_features[i][j]).to(device)
+                        feat = torch.pow(feat.to(device),2)
 
                         if i not in list_features_std:
                             list_features_std[i].append(feat)

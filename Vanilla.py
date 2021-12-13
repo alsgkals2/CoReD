@@ -6,7 +6,7 @@ from tqdm import tqdm
 #This is for Task1 (Single model, No teacher-student framework)
 def Train(args):
     lr = args.lr
-    savepath = f'./weights/{args.name_sources}/{args.name_saved_folder2}/'
+    savepath = f'./weights/{args.name_sources}/{args.name_folder2}/'
     if '//' in savepath :
         savepath = savepath.replace('//','/')
     if not os.path.isdir(savepath):
@@ -15,7 +15,7 @@ def Train(args):
     print('lr is ',lr)
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    _, model = load_models(args.path_preweight, args.name_sources, False)
+    _, model = load_models(args.weigiht, args.name_sources, False)
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
@@ -59,21 +59,28 @@ def Train(args):
         print("Epoch: {}/{} - CE_Loss: {:.4f} | ACC: {:.4f}".format(epoch+1, epochs, np.mean(running_loss), correct / total))
         
         #validataion
-        _, _, source_acc = Test(dicLoader['val_source'], model, criterion)
-        total_acc = source_acc
+        _, _, test_acc = Test(dicLoader['val_target'], student_model, criterion)
+        total_acc = test_acc
+        #continual val check
+        for name in dicSourceName:
+            if 'val_source' in name:
+                _, _, source_acc = Test(dicLoader[name], student_model, criterion)
+                total_acc += source_acc
             
         is_best_acc = total_acc > best_acc  
         if (epoch+1)%20 ==0 or is_best_acc:
             if is_best_acc : best_acc = total_acc
             is_best_acc = True
-            best_acc = max(correct / total,best_acc)
+            best_acc = max(total_acc,best_acc)
             save_checkpoint({
                 'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
+                'state_dict': student_model.state_dict(),
                 'best_acc': best_acc,
                 'optimizer': optimizer.state_dict()
-            },  isAcc=is_best_acc,
-                checkpoint=savepath,
-                best_filename = '{}_epoch_{}.pth.tar'.format(args.path_preweight,epoch+1 if (epoch+1)%10==0 else ''))
+            },  args,
+                filename = '{}_epoch_{}.pth.tar'.format(args.weigiht,epoch+1 if (epoch+1)%10==0 else ''),
+                ACC_BEST=True
+                )
 
             print('! ! ! save ! ! !')
+

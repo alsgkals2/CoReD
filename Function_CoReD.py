@@ -61,7 +61,7 @@ def GetSplitLoadersRealFake(list_correct,dataset,train_aug=None,num_store_per=5)
     list_length_realfakeloader = [[len(j.dataset) if j else 0 for j in i] for i in correct_loader]
     return correct_loader,np.array(list_length_realfakeloader)/len(dataset.target),save_ceckpoint_for_unlearning
 
-def GetListTeacherFeatureFakeReal(model, loader,mode='X',showScatter = False):
+def GetListTeacherFeatureFakeReal(model, loader,mode='Xception',showScatter = False, device='cuda'):
     
     list_features = [[],[]]
     maxpool = nn.MaxPool2d(4)
@@ -76,12 +76,12 @@ def GetListTeacherFeatureFakeReal(model, loader,mode='X',showScatter = False):
                     continue
                 temp = None
                 for _,(img, label) in enumerate(loader[i][j]):
-                    train_results[i].append(model(img.cuda()).cpu().detach().numpy())
+                    train_results[i].append(model(img.to(device)).cpu().detach().numpy())
                     labels[i].append(label)
-                    if mode == 'E':
-                        test = model.extract_features(img.cuda())
+                    if mode == 'Efficient':
+                        test = model.extract_features(img.to(device))
                     else:
-                        test = model.features(img.cuda())
+                        test = model.features(img.to(device))
                     if temp is not None:
                         temp = torch.cat((maxpool(test),temp))
                     else:
@@ -101,14 +101,14 @@ def GetListTeacherFeatureFakeReal(model, loader,mode='X',showScatter = False):
                 plt.show()
     return list_features
 
-def func_correct(model, data_loader):
+def func_correct(model, data_loader, device='cuda'):
     list_correct = [[[],[]] for i in range(5)]
     model.eval()
     cnt=0
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(data_loader):
-            _inputs = inputs.cuda()
-            _targets = targets.cuda()
+            _inputs = inputs.to(device)
+            _targets = targets.to(device)
             outputs = model(_inputs)
             temp = F.softmax(outputs,dim=1)
             for l in range(len(_targets)):
@@ -120,14 +120,14 @@ def func_correct(model, data_loader):
                 cnt += 1
         return list_correct
 
-def func_correct_avgfeat(model, data_loader):
+def func_correct_avgfeat(model, data_loader, device='cuda'):
     list_correct = [[[],[]] for i in range(5)]
     model.eval()
     cnt=0
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(data_loader):
-            _inputs = inputs.cuda()
-            _targets = targets.cuda()
+            _inputs = inputs.to(device)
+            _targets = targets.to(device)
             outputs = model(_inputs)
             temp = F.softmax(outputs,dim=1)
             for l in range(len(_targets)):
@@ -145,15 +145,15 @@ def GetRatioData(list_real_fake,correct_cnt):
     list_length_realfakeloader = np.array([[len(j) if j else 0 for j in i] for i in list_real_fake])
     return list_length_realfakeloader/correct_cnt
 
-def correct_binary(model, inputs, targets, b_ratio_Data = False):
+def correct_binary(model, inputs, targets, b_ratio_Data = False, device='cuda'):
     list_correct = [[[], []] for i in range(5)]
     model.eval()
     cnt = 0
     correct_cnt=0
     ratio_data = None
     with torch.no_grad():
-        _inputs = inputs.cuda()
-        _targets = targets.cuda()
+        _inputs = inputs.to(device)
+        _targets = targets.to(device)
         outputs = model(_inputs)
         temp = nn.Softmax(dim=1)(outputs)
         temp = temp.cpu()
@@ -170,36 +170,15 @@ def correct_binary(model, inputs, targets, b_ratio_Data = False):
             ratio_data = GetRatioData(list_correct,correct_cnt)
     return list_correct, ratio_data
 
-def correct_2(model, inputs, targets):
-    list_correct = [[[], []] for i in range(5)]
-    model.eval()
-    cnt = 0
-   
-    _inputs = inputs.cuda()
-    _targets = targets.cuda()
-    with torch.no_grad():
-        outputs = model(_inputs)
-        temp = nn.Softmax(dim=1)(outputs)
-        for l in range(len(_targets)):
-            idx = _GetIndex_2(temp[l][_targets[l]].data)
-            if idx >= 0:
-                correct_cnt+=1
-                if _targets[l] == 0:
-                    list_correct[idx][0].append((cnt,_inputs[l]))
-                else:
-                    list_correct[idx][1].append((cnt,_inputs[l]))
-            cnt += 1
-    return list_correct
-
-def correct_binary_avgfeat(model, inputs, targets, b_ratio_Data = False):
+def correct_binary_avgfeat(model, inputs, targets, b_ratio_Data = False, device='cuda'):
     list_correct = [[[], []] for i in range(5)]
     model.eval()
     cnt = 0
     correct_cnt=0
     ratio_data = None
     with torch.no_grad():
-        _inputs = inputs.cuda()
-        _targets = targets.cuda()
+        _inputs = inputs.to(device)
+        _targets = targets.to(device)
         outputs = model(_inputs)
         temp = nn.Softmax(dim=1)(outputs)
         for l in range(len(_targets)):
@@ -215,12 +194,12 @@ def correct_binary_avgfeat(model, inputs, targets, b_ratio_Data = False):
             ratio_data = GetRatioData(list_correct,correct_cnt)
     return list_correct, ratio_data
 
-def correct_2_avgfeat(model, inputs, targets):
+def correct_2_avgfeat(model, inputs, targets, device='cuda'):
     list_correct = [[[], []] for i in range(5)]
     model.eval()
     cnt = 0
-    _inputs = inputs.cuda()
-    _targets = targets.cuda()
+    _inputs = inputs.to(device)
+    _targets = targets.to(device)
     with torch.no_grad():
         for l in range(len(_targets)):
             idx = 0
@@ -234,17 +213,17 @@ def correct_2_avgfeat(model, inputs, targets):
     return list_correct
 
 
-def GetFeatureMaxpool(model,list_loader,mode='X'): #list_loader : consists of index,data
+def GetFeatureMaxpool(model,list_loader,mode='Xception',device='cuda'): #list_loader : consists of index,data
     feat = None
     maxpool = nn.MaxPool2d(4) #If using other networks, we can consider the number '4'
     if not list_loader : return 0
     for idx, img in list_loader:
         img = torch.reshape(img,(1,3,128,128))
-        if mode == 'E':
-            feat_std = model.extract_features(img.cuda())
+        if mode == 'Efficient':
+            feat_std = model.extract_features(img.to(device))
         else:
-            feat_std = model.features(img.cuda())
-        feat_std = feat_std.cuda()
+            feat_std = model.features(img.to(device))
+        feat_std = feat_std.to(device)
         if feat is not None:
             feat = torch.cat((maxpool(feat_std),feat))
         else:

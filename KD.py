@@ -2,6 +2,7 @@ from Function_common import *
 from Function_CoReD import *
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
+import torch.optim as optim
 
 def Train(args):
     lr = args.lr
@@ -11,8 +12,8 @@ def Train(args):
 
     print('GPU num is' , args.num_gpu)
     os.environ['CUDA_VISIBLE_DEVICES'] =str(args.num_gpu)
-    savepath = f'./{args.name_sources}_{args.name_target}/{args.name_saved_folder2}/'
-    if '//' in savepath :
+    savepath = f'./{args.name_sources}_{args.name_target}/{args.name_folder2}/'
+    if '//' in savepath :``
         savepath = savepath.replace('//','/')
     if not os.path.isdir(savepath):
         os.makedirs(savepath)
@@ -24,7 +25,7 @@ def Train(args):
 
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    teacher_model, student_model = load_models(args.path_preweight, args.name_sources)
+    teacher_model, student_model = load_models(args.weigiht, nameNet='Xception', num_gpu=args.num_gpu)
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
@@ -83,29 +84,26 @@ def Train(args):
         #validataion
         _, _, test_acc = Test(dicLoader['val_target'], student_model, criterion)
         total_acc = test_acc
-        _, _, source_acc = Test(dicLoader['val_source'], student_model, criterion)
-        total_acc += source_acc
-        if 'source2' in dicSourceName:
-            _, _, source_acc2 = Test(dicLoader['val_source2'], student_model, criterion)
-            total_acc += source_acc2
-        if 'source3' in dicSourceName:
-            _, _, source_acc3 = Test(dicLoader['val_source3'], student_model, criterion)
-            total_acc += source_acc3
+        #continual val check
+        for name in dicSourceName:
+            if 'val_source' in name:
+                _, _, source_acc = Test(dicLoader[name], student_model, criterion)
+                total_acc += source_acc
             
         is_best_acc = total_acc > best_acc  
         if (epoch+1)%20 ==0 or is_best_acc:
             if is_best_acc : best_acc = total_acc
             is_best_acc = True
-            best_acc = max(correct / total,best_acc)
+            best_acc = max(total_acc,best_acc)
             save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': student_model.state_dict(),
                 'best_acc': best_acc,
                 'optimizer': optimizer.state_dict()
-            },  isAcc=is_best_acc,
-                checkpoint=savepath,
-                best_filename = '{}_epoch_{}.pth.tar'.format(args.path_preweight,epoch+1 if (epoch+1)%10==0 else ''))
+            },  args,
+                filename = '{}_epoch_{}.pth.tar'.format(args.weigiht,epoch+1 if (epoch+1)%10==0 else ''),
+                ACC_BEST=True
+                )
+
             print('! ! ! save ! ! !')
-
-
 

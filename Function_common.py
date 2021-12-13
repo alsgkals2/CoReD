@@ -98,6 +98,8 @@ def initialization(args):
         temp = name_sources.split('_')
         cnt=1
         for _name in temp:
+            if _name == 'AVC': _name='AVC_D'
+            if _name == 'D' : continue
             dict_source[f'source{cnt}'] = _name
             print(f'Source Name : {_name}')
             cnt+=1
@@ -228,7 +230,7 @@ def Make_DataLoader(dir,
 
 def Make_DataLoader_continual(dir,
                               name_source,
-                              name_target,
+                              name_target='',
                               name_mixed_folder='',
                               mode_CoReD = True,
                               train_aug=None,
@@ -253,10 +255,7 @@ def Make_DataLoader_continual(dir,
         target_dataset_mix = os.path.join(dir.replace('CLRNet_jpg25', ''), name_target)
         val_target_dir_MIXED = os.path.join(target_dataset_mix,'val')
 
-    print("DATASET PATHS")
-    print('val_source_dir ' ,val_source_dir)
-    print('val_target_dir ' ,val_target_dir)
-    print('train_dir ' ,train_dir)
+
     val_source_loader = []
     cnt = 1
     NUM_WORKIER = 12
@@ -269,7 +268,12 @@ def Make_DataLoader_continual(dir,
                                             pin_memory=True
                                             )
             val_source_loader.append(copy.deepcopy(_loader))
+
     if TRAIN_MODE:
+        print("DATASET PATHS")
+        print('val_source_dir ' ,val_source_dir)
+        print('val_target_dir ' ,val_target_dir)
+        print('train_dir ' ,train_dir)
         train_target_loader, train_target_loader_forcorrect = None,None
         train_target_dataset = datasets.ImageFolder(train_dir,transform=None)
         train_target_dataset = CustumDataset(np.array(train_target_dataset.samples)[:,0],np.array(train_target_dataset.targets),train_aug)
@@ -311,12 +315,14 @@ def Make_DataLoader_continual(dir,
             dic[f'val_dataset{cnt}'] = _loader
             cnt += 1
         dic_CoReD = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
+    
     else:
         dic = OrderedDict()
         for _loader in val_source_loader:
             dic[f'test_dataset{cnt}'] = _loader
             cnt += 1
         dic_CoReD = None
+
     return dic, dic_CoReD
 
 def Test_PRF(test_loader, model, criterion, log=None): # precision/recall/f1-score
@@ -403,6 +409,7 @@ def Test(val_loader, model, criterion, log = None, source_name = ''): #Accuracy
     return (losses.avg, arc.avg, correct/total*100)
 
 def Eval(args, log = None,ok_PRF = False):
+    if log : log.write(' ---------------- EVAL ---------------- ')
     dicLoader,_, dicSourceName = initialization(args)
     model_list=[]
     weight_path = args.weigiht
@@ -420,7 +427,7 @@ def Eval(args, log = None,ok_PRF = False):
     
     print(f'Loading BAKBONE MODEL {args.network} ...')
     for model_item in model_list:
-        _, student_model = load_models(model_item, args.network, not args.test)
+        _, student_model = load_models(model_item, args.network, args.num_gpu, not args.test)
         criterion = nn.CrossEntropyLoss().cuda()
 
         for _key, _name in zip(dicLoader, dicSourceName):
@@ -452,8 +459,9 @@ def get_augs():
     return train_aug, val_aug
 
 
-def load_models(weigiht, nameNet, TrainMode=True):
+def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
     teacher_model, student_model = None,None
+    device = 'cuda' if num_gpu else 'cpu'
     if weigiht:
         checkpoint = None
         print(weigiht)
@@ -471,16 +479,20 @@ def load_models(weigiht, nameNet, TrainMode=True):
     elif nameNet=='Efficient':
         teacher_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
         student_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
-
+    if ',' in num_gpu :
+        teacher_model = nn.DataParallel(teacher_model)
+        student_model = nn.DataParallel(student_model)
     if TrainMode:
         teacher_model.load_state_dict(checkpoint['state_dict'])
         student_model.load_state_dict(checkpoint['state_dict'])
-        teacher_model.eval(); teacher_model.to('cuda')
+        teacher_model.eval();
         student_model.train();
     else:
         student_model.load_state_dict(checkpoint['state_dict'])
         student_model.eval();
-    student_model.cuda()
+        
+    student_model.to(device)
+    teacher_model.to(device)
 
     return teacher_model, student_model
 
