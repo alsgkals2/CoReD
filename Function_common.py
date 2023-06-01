@@ -462,10 +462,9 @@ def get_augs():
 def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
     teacher_model, student_model = None,None
     device = 'cuda' if num_gpu else 'cpu'
+    checkpoint = None
     if weigiht:
-        checkpoint = None
         print(weigiht)
-
         if os.path.isdir(weigiht):
             checkpoint =torch.load(weigiht+'/model_best_accuracy.pth.tar')
         elif os.path.isfile(weigiht):
@@ -473,6 +472,7 @@ def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
         else:
             print("preweight is not exist !")
 
+    #model load
     if nameNet=='Xception':
         teacher_model = xception_origin.xception(num_classes=2, pretrained='')
         student_model = xception_origin.xception(num_classes=2, pretrained='')
@@ -482,15 +482,16 @@ def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
     if ',' in num_gpu :
         teacher_model = nn.DataParallel(teacher_model)
         student_model = nn.DataParallel(student_model)
+
+    #weight load
     if TrainMode:
-        teacher_model.load_state_dict(checkpoint['state_dict'])
-        student_model.load_state_dict(checkpoint['state_dict'])
-        teacher_model.eval();
-        student_model.train();
-    else:
-        student_model.load_state_dict(checkpoint['state_dict'])
-        student_model.eval();
-        
+        if checkpoint:
+            teacher_model.load_state_dict(checkpoint['state_dict'])
+            student_model.load_state_dict(checkpoint['state_dict'])
+            student_model.train();
+        else:
+            student_model.eval();
+    teacher_model.eval();
     student_model.to(device)
     teacher_model.to(device)
 
