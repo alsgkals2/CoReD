@@ -69,8 +69,8 @@ To train and evaluate the model(s) in the paper, run this command:
 - **Task1**
    We must train pre-trained single model for task1 .
     ```TRAIN
-   python main.py -s={Source Name} -d={folder_path} -w={weights}  
-   python main.py -s=DeepFake -d=./mydrive/dataset/' #Example 
+   python main.py -t={Source Name} -d={folder_path} -w={weights}  
+   python main.py -t=DeepFake -d=./mydrive/dataset/' #Example 
     ```
 - **Task2 - 4**
     ```TRAIN
