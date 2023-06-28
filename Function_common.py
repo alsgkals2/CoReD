@@ -50,8 +50,8 @@ def rand_bbox(size, lam):
     W = size[2]
     H = size[3]
     cut_rat = np.sqrt(1. - lam)
-    cut_w = np.int(W * cut_rat)
-    cut_h = np.int(H * cut_rat)
+    cut_w = np.int32(W * cut_rat)
+    cut_h = np.int32(H * cut_rat)
 
     # uniform
     cx = np.random.randint(W)
@@ -93,13 +93,11 @@ def initialization(args):
     name_sources = args.name_sources
     name_target = args.name_target
     path_data = args.data
-    if not '_' in name_sources : dict_source['source'] = name_sources #TASK 0
+    if not name_sources : dict_source['source'] = name_sources #TASK 0
     else: #TASK 1 ~
         temp = name_sources.split('_')
         cnt=1
         for _name in temp:
-            if _name == 'AVC': _name='AVC_D'
-            if _name == 'D' : continue
             dict_source[f'source{cnt}'] = _name
             print(f'Source Name : {_name}')
             cnt+=1
@@ -107,12 +105,18 @@ def initialization(args):
 
     #train & valid
     train_aug, val_aug = get_augs()
-    if '_' not in name_sources: #Task1 (pre-train before continual learning) or Test mode
+    if not name_sources: #Task1 (pre-train before continual learning) or Test mode
+        print("path_data, dict_source['source']")
         print(path_data, dict_source['source'])
         dicLoader,dicCoReD = Make_DataLoader(path_data, dict_source['source'],
-                                            name_target, train_aug=train_aug, val_aug=val_aug,
-                                            mode_CoReD=True, batch_size=args.batch_size,
-                                            TRAIN_MODE=not args.test, MODE_BALANCED_DATA=False)
+                                            name_target,
+                                            train_aug=train_aug,
+                                            val_aug=val_aug,
+                                            mode_CoReD=False,
+                                            batch_size=args.batch_size,
+                                            TRAIN_MODE=not args.test,
+                                            MODE_BALANCED_DATA=False,
+                                            fully_train=args.fully_train)
     else: #Task2-4 (continual learning)
         print('===> Making Loader for Continual Learning..')
         dicLoader,dicCoReD = Make_DataLoader_continual(path_data, name_source=dict_source,
@@ -121,7 +125,8 @@ def initialization(args):
                                                     val_aug=val_aug,
                                                     mode_CoReD=True,
                                                     batch_size=args.batch_size,
-                                                    TRAIN_MODE=not args.test)
+                                                    TRAIN_MODE=not args.test,
+                                                    fully_train=args.fully_train)
     return dicLoader, dicCoReD, dict_source
     
 
@@ -134,22 +139,32 @@ def Make_DataLoader(dir,
                     mode_CoReD = False,
                     batch_size=128,
                     TRAIN_MODE=True,
-                    MODE_BALANCED_DATA = False
+                    MODE_BALANCED_DATA = False,
+                    fully_train = False
+
                     ):
     dic_CoReD = None
     if TRAIN_MODE:
-        if name_mixed_folder : MIXED_MODE = True
-        else: MIXED_MODE = False
-        val_target_dir_mixed=''
-        val_target_loader_mixed=None
+        if name_mixed_folder :
+            MIXED_MODE = True
+        else :
+            MIXED_MODE = False
+        val_target_loader_mixed = None
+        val_source_loader = None
+        val_target_dir_mixed = ''
+        val_source_dir = ''
+        val_target_dir = ''
         print('param check')
         print(dir, name_source, name_target, name_mixed_folder)
-        train_dir = os.path.join(dir,'TransferLearning',name_mixed_folder if MIXED_MODE else name_target,'train')
+        name_last_folder = '{}/train/'.format(name_target if not name_mixed_folder else name_mixed_folder)
+        _name = 'TransferLearning' if not fully_train else ''
+        train_dir = os.path.join(dir, _name if name_source else '', name_last_folder)
         print(train_dir)
         #For Validataion
-        source_dataset = os.path.join(dir,name_source)
+        if name_source:
+            source_dataset = os.path.join(dir,name_source)
+            val_source_dir = os.path.join(source_dataset, 'val')
         target_dataset = os.path.join(dir,name_target)
-        val_source_dir = os.path.join(source_dataset, 'val')
         val_target_dir = os.path.join(target_dataset, 'val')
 
         #check the paths
@@ -167,7 +182,9 @@ def Make_DataLoader(dir,
 
         train_target_loader, train_target_loader_forcorrect = None,None
         train_target_dataset = datasets.ImageFolder(train_dir,transform=None)
+        print(len(train_target_dataset))
         train_target_dataset = CustumDataset(np.array(train_target_dataset.samples)[:,0], np.array(train_target_dataset.targets), train_aug)
+        
         train_target_loader = DataLoader(train_target_dataset,
                                         batch_size=batch_size,
                                         shuffle=True,
@@ -175,24 +192,29 @@ def Make_DataLoader(dir,
                                         pin_memory=True
                                         )
 
-        if mode_CoReD : train_target_loader_forcorrect = DataLoader(train_target_dataset,
-                                                                    batch_size=batch_size,
-                                                                    shuffle=False,
-                                                                    num_workers=8,
-                                                                    pin_memory=True
-                                                                    )
+        if mode_CoReD :
+            train_target_loader_forcorrect = DataLoader(train_target_dataset,
+                                                        batch_size=batch_size,
+                                                        shuffle=False,
+                                                        num_workers=8,
+                                                        pin_memory=True
+                                                        )
         val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                     batch_size=batch_size,
                                     shuffle=False,
                                     num_workers=4,
                                     pin_memory=True
                                     )
-        val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
-                                    batch_size=batch_size,
-                                    shuffle=False,
-                                    num_workers=4,
-                                    pin_memory=True
-                                    )
+        if val_source_dir:
+            print(val_source_dir)
+            print(val_source_dir)
+            print(val_source_dir)
+            val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
+                                        batch_size=batch_size,
+                                        shuffle=False,
+                                        num_workers=4,
+                                        pin_memory=True
+                                        )
         if name_mixed_folder:
             val_target_loader_mixed = DataLoader(datasets.ImageFolder(val_target_dir_mixed, val_aug),
                                                 batch_size=batch_size,
@@ -202,9 +224,10 @@ def Make_DataLoader(dir,
                                                 )
         dic = {'train_target': train_target_loader, 'val_source': val_source_loader,'val_target': val_target_loader, 'val_target_mix':val_target_loader_mixed}
         dic_CoReD = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
-    
+        print("train_target_loader_forcorrect")
+        print(train_target_loader_forcorrect)
     else: #Test mode
-        train_target_dataset = datasets.ImageFolder(dir,transform=None)
+        train_target_dataset = datasets.ImageFolder(dir, transform=None)
         new_samples = train_target_dataset.samples
 
         if MODE_BALANCED_DATA:
@@ -236,10 +259,15 @@ def Make_DataLoader_continual(dir,
                               train_aug=None,
                               val_aug=None,
                               batch_size=128,
-                              TRAIN_MODE = True
+                              TRAIN_MODE = True,
+                              fully_train = False
                               ):
-    train_dir = os.path.join(dir+'/TransferLearning', '{}/train/'.format(name_target if not name_mixed_folder else name_mixed_folder))
+    name_last_folder = '{}/train/'.format(name_target if not name_mixed_folder else name_mixed_folder)
+    _name = 'TransferLearning' if not fully_train else ''
+    train_dir = os.path.join(dir, _name if name_source else '', name_last_folder)
+        # train_dir = os.path.join(dir+'/TransferLearning' if name_source else '', '{}/train/'.format(name_target if not name_mixed_folder else name_mixed_folder))
     #For Validataion
+    print(name_source)
     val_target_loader_mixed=None
     val_target_dir_MIXED = ''
     source_dataset=[]
@@ -247,7 +275,7 @@ def Make_DataLoader_continual(dir,
     for _item in name_source:
         source_dataset.append(os.path.join(dir,name_source[_item]))
         val_source_dir.append(os.path.join(source_dataset[-1], 'val'))
-
+        print(val_source_dir,'----------')
     target_dataset = os.path.join(dir,name_target)
     val_target_dir = os.path.join(target_dataset, 'val')
     #check the paths
@@ -262,11 +290,11 @@ def Make_DataLoader_continual(dir,
     for dir in val_source_dir:
             print('===> Making Loader :', dir)
             _loader = DataLoader(datasets.ImageFolder(dir, val_aug),
-                                            batch_size=batch_size,
-                                            shuffle=False,
-                                            num_workers=NUM_WORKIER,
-                                            pin_memory=True
-                                            )
+                                batch_size=batch_size,
+                                shuffle=False,
+                                num_workers=NUM_WORKIER,
+                                pin_memory=True
+                                )
             val_source_loader.append(copy.deepcopy(_loader))
 
     if TRAIN_MODE:
@@ -275,7 +303,7 @@ def Make_DataLoader_continual(dir,
         print('val_target_dir ' ,val_target_dir)
         print('train_dir ' ,train_dir)
         train_target_loader, train_target_loader_forcorrect = None,None
-        train_target_dataset = datasets.ImageFolder(train_dir,transform=None)
+        train_target_dataset = datasets.ImageFolder(train_dir, transform=None)
         train_target_dataset = CustumDataset(np.array(train_target_dataset.samples)[:,0],np.array(train_target_dataset.targets),train_aug)
         train_target_loader = DataLoader(train_target_dataset,
                                         batch_size=batch_size,
@@ -285,12 +313,13 @@ def Make_DataLoader_continual(dir,
                                         )
         assert (os.path.exists(train_dir) and os.path.exists(val_source_dir[0]) and os.path.exists(val_target_dir),'Check PTAH !!!')
 
-        if mode_CoReD : train_target_loader_forcorrect = DataLoader(train_target_dataset,
-                                                                    batch_size=batch_size,
-                                                                    shuffle=False,
-                                                                    num_workers=NUM_WORKIER,
-                                                                    pin_memory=True
-                                                                    )
+        if mode_CoReD :
+            train_target_loader_forcorrect = DataLoader(train_target_dataset,
+                                                        batch_size=batch_size,
+                                                        shuffle=False,
+                                                        num_workers=NUM_WORKIER,
+                                                        pin_memory=True
+                                                        )
 
         val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                     batch_size=batch_size,
@@ -315,7 +344,6 @@ def Make_DataLoader_continual(dir,
             dic[f'val_dataset{cnt}'] = _loader
             cnt += 1
         dic_CoReD = {'train_target_dataset':train_target_dataset ,'train_target_forCorrect':train_target_loader_forcorrect}
-    
     else:
         dic = OrderedDict()
         for _loader in val_source_loader:
@@ -409,7 +437,8 @@ def Test(val_loader, model, criterion, log = None, source_name = ''): #Accuracy
     return (losses.avg, arc.avg, correct/total*100)
 
 def Eval(args, log = None,ok_PRF = False):
-    if log : log.write(' ---------------- EVAL ---------------- ')
+    if log :
+        log.write(' ---------------- EVAL ---------------- ')
     dicLoader,_, dicSourceName = initialization(args)
     model_list=[]
     weight_path = args.weigiht
@@ -427,6 +456,7 @@ def Eval(args, log = None,ok_PRF = False):
     
     print(f'Loading BAKBONE MODEL {args.network} ...')
     for model_item in model_list:
+        model_item = os.path.join(model_item, args.name_folder1)
         _, student_model = load_models(model_item, args.network, args.num_gpu, not args.test)
         criterion = nn.CrossEntropyLoss().cuda()
 
@@ -466,7 +496,7 @@ def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
     if weigiht:
         print(weigiht)
         if os.path.isdir(weigiht):
-            checkpoint =torch.load(weigiht+'/model_best_accuracy.pth.tar')
+            checkpoint =torch.load(os.path.join(weigiht, 'model_best_accuracy.pth.tar'))
         elif os.path.isfile(weigiht):
             checkpoint = torch.load(weigiht)
         else:
@@ -486,15 +516,18 @@ def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
     #weight load
     if TrainMode:
         if checkpoint:
-            teacher_model.load_state_dict(checkpoint['state_dict'])
-            student_model.load_state_dict(checkpoint['state_dict'])
+            if ',' in num_gpu :
+                teacher_model.module.load_state_dict(checkpoint['state_dict'])
+                student_model.module.load_state_dict(checkpoint['state_dict'])
+            else:
+                teacher_model.load_state_dict(checkpoint['state_dict'])
+                student_model.load_state_dict(checkpoint['state_dict'])
             student_model.train();
         else:
             student_model.eval();
     teacher_model.eval();
     student_model.to(device)
     teacher_model.to(device)
-
     return teacher_model, student_model
 
 def save_checkpoint(state, checkpoint, filename='checkpoint.pth.tar' , AUC_BEST = False, ACC_BEST = False):
@@ -514,10 +547,12 @@ def Make_DataLoader_together(rootpath_dataset,
                             train_aug=None,
                             val_aug=None,
                             mode_CoReD=False,
-                            batch_size=128
+                            batch_size=128,
+                            fully_train = False
                             ):
-    train_dir = os.path.join(rootpath_dataset ,'TransferLearning', name_target , 'train/')
-    train_dir2 = os.path.join(rootpath_dataset ,'TransferLearning', name_target2 , 'train/')
+    _name = 'TransferLearning' if not fully_train else ''
+    train_dir = os.path.join(rootpath_dataset ,_name, name_target , 'train/')
+    train_dir2 = os.path.join(rootpath_dataset ,_name, name_target2 , 'train/')
 
     # For Validataion
     source_dataset = os.path.join(rootpath_dataset, name_source)
@@ -553,11 +588,11 @@ def Make_DataLoader_together(rootpath_dataset,
                                      )
     if mode_CoReD:
         train_target_loader_forcorrect = DataLoader(train_target_dataset,
-                                                                batch_size=batch_size,
-                                                                shuffle=False,
-                                                                num_workers=4,
-                                                                pin_memory=True
-                                                                )
+                                                    batch_size=batch_size,
+                                                    shuffle=False,
+                                                    num_workers=4,
+                                                    pin_memory=True
+                                                    )
 
     val_target_loader = DataLoader(datasets.ImageFolder(val_target_dir, val_aug),
                                    batch_size=batch_size,
@@ -571,12 +606,13 @@ def Make_DataLoader_together(rootpath_dataset,
                                     num_workers=4,
                                     pin_memory=True
                                     )
-    val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
-                                    batch_size=batch_size,
-                                   shuffle=True,
-                                   num_workers=4,
-                                   pin_memory=True
-                                   )
+    if val_source_dir:
+        val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
+                                        batch_size=batch_size,
+                                        shuffle=True,
+                                        num_workers=4,
+                                        pin_memory=True
+                                        )
 
     dic = {'train_target': train_target_loader, 'val_source': val_source_loader,
            'val_target': val_target_loader,'val_target2': val_target_loader2}

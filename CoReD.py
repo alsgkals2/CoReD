@@ -12,6 +12,7 @@ def Train(args, log = None):
     num_class = args.num_class
     num_store_per = args.num_store
     savepath = args.folder_weight
+    _weight = os.path.join(args.weigiht, args.name_folder1)
     if '//' in savepath :
         savepath = savepath.replace('//','/')
     print(f'save path : {savepath}')
@@ -19,29 +20,34 @@ def Train(args, log = None):
     print('KD_alpha is ',KD_alpha)
     print('num_class is ',num_class)
     print('num_store_per is ',num_store_per)
+    print('load weight path is ', _weight)
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    teacher_model, student_model = load_models(args.weigiht, args.network, num_gpu = args.num_gpu)#, args.test)    criterion = nn.CrossEntropyLoss().to(device)
+    teacher_model, student_model = load_models(_weight, args.network, num_gpu = args.num_gpu)#, args.test)    criterion = nn.CrossEntropyLoss().to(device)
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
-    _list_correct = func_correct(teacher_model.to(device),dicCoReD['train_target_forCorrect'])
-    _correct_loaders, _ = GetSplitLoaders_BinaryClasses(_list_correct, dicCoReD['train_target_dataset'], get_augs()[0], num_store_per)
-            
-    # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
-    list_features = GetListTeacherFeatureFakeReal(teacher_model.module if ',' in args.num_gpu else teacher_model ,_correct_loaders, mode=args.network)
-    list_features = np.array(list_features)
+    best_epoch = 0
+    if not args.name_sources:
+        del teacher_model
+        teacher_model = None
+    else:
+        _list_correct = func_correct(teacher_model.to(device), dicCoReD['train_target_forCorrect'])
+        _correct_loaders, _ = GetSplitLoaders_BinaryClasses(_list_correct, dicCoReD['train_target_dataset'], get_augs()[0], num_store_per)
+        # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
+        list_features = GetListTeacherFeatureFakeReal(teacher_model.module if ',' in args.num_gpu else teacher_model ,_correct_loaders, mode=args.network)
+        list_features = np.array(list_features, dtype = torch.float32)
 
-    best_acc,epochs=0, args.epochs
+    best_acc,epochs=0, args.epochs 
     print('epochs={}'.format(epochs))
     is_best_acc = False
     
     for epoch in range(epochs):
         running_loss = []
-        running_loss_kd = []
         running_loss_other = []
         correct,total = 0,0
-        teacher_model.eval()
+        if teacher_model:
+            teacher_model.eval()
         student_model.train()
         for(inputs, targets) in tqdm(dicLoader['train_target']):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -64,26 +70,31 @@ def Train(args, log = None):
 
             optimizer.zero_grad()
             with autocast(enabled=True):
-                for j in range(num_store_per):
-                    for i in range(num_class):
-                        feat = GetFeatureMaxpool(student_model.module if ',' in args.num_gpu else student_model,correct_loader_std[j][i])
-                        if(list_features[i][j]==0):continue
-                        feat = feat-torch.tensor(list_features[i][j]).to(device)
-                        feat = torch.pow(feat.to(device),2)
+                if teacher_model:
+                    for j in range(num_store_per):
+                        for i in range(num_class):
+                            feat = GetFeatureMaxpool(student_model.module if ',' in args.num_gpu else student_model,correct_loader_std[j][i])
+                            if(list_features[i][j]==0) :
+                                continue
+                            feat = feat - torch.tensor(list_features[i][j]).to(device)
+                            feat = torch.pow(feat.to(device),2)
 
-                        if i not in list_features_std:
-                            list_features_std[i].append(feat)
+                            if i not in list_features_std:
+                                list_features_std[i].append(feat)
 
-                teacher_outputs = teacher_model(inputs)
                 outputs = student_model(inputs)
                 loss_main = criterion(outputs, targets)
-                loss_kd = loss_fn_kd(outputs,targets,teacher_outputs)
-                sne_loss=0
-                for fs in list_features_std:
-                    for ss in fs:
-                        if ss.requires_grad:
-                            sne_loss += ss
-                loss = loss_main + loss_kd + sne_loss
+                if teacher_model:
+                    teacher_outputs = teacher_model(inputs)
+                    loss_kd = loss_fn_kd(outputs, targets, teacher_outputs)
+                    sne_loss=0
+                    for fs in list_features_std:
+                        for ss in fs:
+                            if ss.requires_grad:
+                                sne_loss += ss
+                    loss = loss_main + loss_kd + sne_loss
+                else: # task1
+                    loss = loss_main
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -91,15 +102,11 @@ def Train(args, log = None):
             _, predicted = torch.max(outputs, 1)
             correct += (predicted == targets).sum().item()
             total += len(targets)
-            running_loss.append(loss_main.cpu().detach().numpy())
-            running_loss_kd.append(loss_kd.cpu().detach().numpy())
-            try:
-                running_loss_other.append(sne_loss.cpu().detach().numpy())
-            except AttributeError:
-                pass
+            running_loss.append(loss.cpu().detach().numpy())
 
         #validataion
-        log.write(' Validation..... \n ')
+        if log:
+            log.write(' Validation..... \n ')
         _, _, test_acc = Test(dicLoader['val_target'], student_model, criterion, log = log, source_name = args.name_target)
         total_acc = test_acc
         cnt = 1
@@ -110,12 +117,13 @@ def Train(args, log = None):
                 cnt+=1
             
         is_best_acc = total_acc > best_acc  
-        if (epoch+1)%20 ==0 or is_best_acc:
+        if (epoch+1) % 20 ==0 or is_best_acc:
             if is_best_acc : best_acc = total_acc
             is_best_acc = True
             best_acc = max(total_acc,best_acc)
             save_checkpoint({
                 'epoch': epoch + 1,
+                'best_epoch': best_epoch,
                 'state_dict': student_model.state_dict(),
                 'best_acc': best_acc,
                 'optimizer': optimizer.state_dict()},
@@ -123,4 +131,8 @@ def Train(args, log = None):
             filename = '{}_epoch_{}.pth.tar'.format(args.weigiht,epoch+1 if (epoch+1)%10==0 else ''),
             ACC_BEST=is_best_acc
             )
+            best_epoch = epoch+1
             print('===> save best model !!!' if is_best_acc else '===> save checkpoint model!')
+        # if epoch+1 - best_epoch >= 10:
+        #     print("===> EARLY STOPPTED")
+        #     break
