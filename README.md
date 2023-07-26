@@ -121,7 +121,7 @@ If you find our work useful for your research, please consider citing the follow
 ```
  
 ## - Contect
-If you have any questions, please contact us at **kimminha/shahroz@g.skku.edu**
+If you have any questions, please contact us at **alsgkals2@naver.com**
 
 
 ## - License
