@@ -1,6 +1,6 @@
 
 from Function_common import *
-from Function_CoReD import *
+from Function_net import *
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 import torch.optim as optim
