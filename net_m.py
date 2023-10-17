@@ -1,18 +1,19 @@
 # this code is made by Minha Kim (github : alsgkals2)
 # if you would use these codes, please inform copyright (github : alsgkals2 & email : kimminha@g.skku.edu)
 from Function_common import *
-from Function_CoReD import *
+from Function_net import *
 import torch.optim as optim
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
-def Train(args, log = None):
+def Train(args, log = None, writer = None):
     device = 'cuda' if args.num_gpu else 'cpu'
     lr = args.lr
     KD_alpha = args.KD_alpha
     num_class = args.num_class
     num_store_per = args.num_store
     savepath = args.folder_weight
-    _weight = os.path.join(args.weigiht, args.name_folder1)
+    _weight = os.path.join(args.weight, args.name_folder1)
+    print(_weight)
     if '//' in savepath :
         savepath = savepath.replace('//','/')
     print(f'save path : {savepath}')
@@ -23,7 +24,8 @@ def Train(args, log = None):
     print('load weight path is ', _weight)
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    teacher_model, student_model = load_models(_weight, args.network, num_gpu = args.num_gpu)#, args.test)    criterion = nn.CrossEntropyLoss().to(device)
+    print("진입")
+    teacher_model, student_model = load_models(_weight, "Xception_modify", num_gpu = args.num_gpu)#, args.test)    criterion = nn.CrossEntropyLoss().to(device)
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.SGD(student_model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
@@ -36,7 +38,7 @@ def Train(args, log = None):
         _correct_loaders, _ = GetSplitLoaders_BinaryClasses(_list_correct, dicCoReD['train_target_dataset'], get_augs()[0], num_store_per)
         # FIXED THE AVG OF FEATURES. IT IS FROM A TEACHER MODEL
         list_features = GetListTeacherFeatureFakeReal(teacher_model.module if ',' in args.num_gpu else teacher_model ,_correct_loaders, mode=args.network)
-        list_features = np.array(list_features, dtype = torch.float32)
+        list_features = np.array(list_features, dtype = np.float32)
 
     best_acc,epochs=0, args.epochs 
     print('epochs={}'.format(epochs))
@@ -128,7 +130,7 @@ def Train(args, log = None):
                 'best_acc': best_acc,
                 'optimizer': optimizer.state_dict()},
             checkpoint = savepath,
-            filename = '{}_epoch_{}.pth.tar'.format(args.weigiht,epoch+1 if (epoch+1)%10==0 else ''),
+            filename = '{}_epoch_{}.pth.tar'.format(args.weight,epoch+1 if (epoch+1)%10==0 else ''),
             ACC_BEST=is_best_acc
             )
             best_epoch = epoch+1

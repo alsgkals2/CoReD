@@ -114,7 +114,7 @@ def func_correct(model, data_loader, device='cuda'):
             for l in range(len(_targets)):
                 idx = _GetIndex(temp[l][_targets[l]].data)
                 if idx >= 0:
-                    if _targets[l]==0 : 
+                    if _targets[l] == 0 : #fake
                         list_correct[idx][0].append(cnt)
                     else : list_correct[idx][1].append(cnt)
                 cnt += 1

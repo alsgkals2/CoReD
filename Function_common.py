@@ -14,7 +14,7 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import roc_auc_score
 from collections import OrderedDict
 from PIL import Image
-import xception_origin
+import xception_origin, xception_m
 from EfficientNet import *
 import copy
 import tqdm
@@ -520,15 +520,22 @@ def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
         teacher_model = xception_origin.xception(num_classes=2, pretrained='')
     elif nameNet=='Efficient':
         teacher_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
+    elif nameNet=='Xception_modify':
+        teacher_model = xception_m.xception(num_classes=2, pretrained='')
+
     if ',' in num_gpu :
         teacher_model = nn.DataParallel(teacher_model)
 
     #weight load
-    if checkpoint:
-        if ',' in num_gpu :
-            teacher_model.module.load_state_dict(checkpoint['state_dict'])
-        else:
-            teacher_model.load_state_dict(checkpoint['state_dict'])
+    try:
+        if checkpoint:
+            if ',' in num_gpu :
+                teacher_model.module.load_state_dict(checkpoint['state_dict'])
+            else:
+                teacher_model.load_state_dict(checkpoint['state_dict'])
+    except Exception as e:
+        print(f"Weight file is not suitable for {nameNet} Netework: ", e)
+        
     if TrainMode:
         student_model = copy.deepcopy(teacher_model)
         student_model.train()
