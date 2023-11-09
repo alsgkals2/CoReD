@@ -1,5 +1,5 @@
 from Function_common import *
-from Function_net import *
+from Function_CoReD import *
 from torch.cuda.amp import autocast, GradScaler
 from tqdm import tqdm
 
@@ -15,7 +15,7 @@ def Train(args):
     print('lr is ',lr)
 
     dicLoader,dicCoReD, dicSourceName = initialization(args)
-    _, model = load_models(args.weight, args.name_sources, False)
+    _, model = load_models(args.weigiht, args.name_sources, False)
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.1)
     scaler = GradScaler()
@@ -78,7 +78,7 @@ def Train(args):
                 'best_acc': best_acc,
                 'optimizer': optimizer.state_dict()
             },  args,
-                filename = '{}_epoch_{}.pth.tar'.format(args.weight,epoch+1 if (epoch+1)%10==0 else ''),
+                filename = '{}_epoch_{}.pth.tar'.format(args.weigiht,epoch+1 if (epoch+1)%10==0 else ''),
                 ACC_BEST=True
                 )
 

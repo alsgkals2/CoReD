@@ -28,12 +28,8 @@ def set_seeds(seed=2020):
 
 class CustumDataset(Dataset):
     def __init__(self, data, target, transform=None):
-        #for debugging
-        self.data = data[:400]
-        self.target = target[:400]
-
-        # self.data = data
-        # self.target = target
+        self.data = data
+        self.target = target
         self.transform = transform
     
     def __len__(self):
@@ -110,9 +106,8 @@ def initialization(args):
     #train & valid
     train_aug, val_aug = get_augs()
     if not name_sources: #Task1 (pre-train before continual learning) or Test mode
-        if dict_source['source']:
-            print("path_data, dict_source['source']")
-            print(path_data, dict_source['source'])
+        print("path_data, dict_source['source']")
+        print(path_data, dict_source['source'])
         dicLoader,dicCoReD = Make_DataLoader(path_data, dict_source['source'],
                                             name_target,
                                             train_aug=train_aug,
@@ -212,6 +207,8 @@ def Make_DataLoader(dir,
                                     )
         if val_source_dir:
             print(val_source_dir)
+            print(val_source_dir)
+            print(val_source_dir)
             val_source_loader = DataLoader(datasets.ImageFolder(val_source_dir, val_aug),
                                         batch_size=batch_size,
                                         shuffle=False,
@@ -230,11 +227,7 @@ def Make_DataLoader(dir,
         print("train_target_loader_forcorrect")
         print(train_target_loader_forcorrect)
     else: #Test mode
-        test_dir = os.path.join(dir, name_target if name_target else '', 'test')
-        #temp
-        print("dir??")
-        print(dir)
-        train_target_dataset = datasets.ImageFolder(test_dir, transform=None)
+        train_target_dataset = datasets.ImageFolder(dir, transform=None)
         new_samples = train_target_dataset.samples
 
         if MODE_BALANCED_DATA:
@@ -318,7 +311,7 @@ def Make_DataLoader_continual(dir,
                                         num_workers=NUM_WORKIER,
                                         pin_memory=True
                                         )
-        assert (os.path.exists(train_dir) and os.path.exists(val_source_dir[0]) and os.path.exists(val_target_dir),'Check Path !!!')
+        assert (os.path.exists(train_dir) and os.path.exists(val_source_dir[0]) and os.path.exists(val_target_dir),'Check PTAH !!!')
 
         if mode_CoReD :
             train_target_loader_forcorrect = DataLoader(train_target_dataset,
@@ -354,7 +347,6 @@ def Make_DataLoader_continual(dir,
     else:
         dic = OrderedDict()
         for _loader in val_source_loader:
-            print("sdfsdfsdf")
             dic[f'test_dataset{cnt}'] = _loader
             cnt += 1
         dic_CoReD = None
@@ -446,10 +438,10 @@ def Test(val_loader, model, criterion, log = None, source_name = ''): #Accuracy
 
 def Eval(args, log = None,ok_PRF = False):
     if log :
-        log.write(' ---------------- EVAL ----------------\n ')
+        log.write(' ---------------- EVAL ---------------- ')
     dicLoader,_, dicSourceName = initialization(args)
     model_list=[]
-    weight_path = args.weight
+    weight_path = args.weigiht
 
     #if weight_path is not file type
     if os.path.isdir(weight_path): 
@@ -460,21 +452,18 @@ def Eval(args, log = None,ok_PRF = False):
                     model_list.append(fullpath)
     elif os.path.isfile(weight_path):
         model_list.append(weight_path)
-    else:
-        print(f"cannot load from {weight_path}")
-        return None
+    else: return None
     
     print(f'Loading BAKBONE MODEL {args.network} ...')
-    for model_path in model_list:
-        # model_item = os.path.join(model_item, args.name_folder1)
-        model, _ = load_models(model_path, args.network, args.num_gpu, not args.test)
-        if not model:
-            print("FAIL Loadding MODEL !")
+    for model_item in model_list:
+        model_item = os.path.join(model_item, args.name_folder1)
+        _, student_model = load_models(model_item, args.network, args.num_gpu, not args.test)
         criterion = nn.CrossEntropyLoss().cuda()
 
         for _key, _name in zip(dicLoader, dicSourceName):
-            Test(dicLoader[_key], model, criterion, log, dicSourceName[_name])
-        if ok_PRF: Test_PRF(dicLoader['test_dataset'], model, criterion, log)
+            print("_key ===> ", _key)
+            Test(dicLoader[_key], student_model, criterion, log, dicSourceName[_name])
+        if ok_PRF: Test_PRF(dicLoader['test_dataset'], student_model, criterion, log)
 
 
 def loss_fn_kd(outputs, labels, teacher_outputs, KD_T=20, KD_alpha=0.5):
@@ -512,31 +501,33 @@ def load_models(weigiht, nameNet='Xception', num_gpu='', TrainMode=True):
             checkpoint = torch.load(weigiht)
         else:
             print("preweight is not exist !")
-            if not TrainMode:
-                return None, None
 
     #model load
     if nameNet=='Xception':
         teacher_model = xception_origin.xception(num_classes=2, pretrained='')
+        student_model = xception_origin.xception(num_classes=2, pretrained='')
     elif nameNet=='Efficient':
         teacher_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
+        student_model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=2)
     if ',' in num_gpu :
         teacher_model = nn.DataParallel(teacher_model)
+        student_model = nn.DataParallel(student_model)
 
     #weight load
-    if checkpoint:
-        if ',' in num_gpu :
-            teacher_model.module.load_state_dict(checkpoint['state_dict'])
-        else:
-            teacher_model.load_state_dict(checkpoint['state_dict'])
     if TrainMode:
-        student_model = copy.deepcopy(teacher_model)
-        student_model.train()
-        student_model.to(device)
-
-    teacher_model.eval()
+        if checkpoint:
+            if ',' in num_gpu :
+                teacher_model.module.load_state_dict(checkpoint['state_dict'])
+                student_model.module.load_state_dict(checkpoint['state_dict'])
+            else:
+                teacher_model.load_state_dict(checkpoint['state_dict'])
+                student_model.load_state_dict(checkpoint['state_dict'])
+            student_model.train();
+        else:
+            student_model.eval();
+    teacher_model.eval();
+    student_model.to(device)
     teacher_model.to(device)
-
     return teacher_model, student_model
 
 def save_checkpoint(state, checkpoint, filename='checkpoint.pth.tar' , AUC_BEST = False, ACC_BEST = False):
