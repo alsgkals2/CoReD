@@ -1,5 +1,3 @@
-# this code is made by Minha Kim (github : alsgkals2)
-# if you would use these codes, please inform copyright (github : alsgkals2 & email : kimminha@g.skku.edu)
 from Function_common import *
 from Function_CoReD import *
 import torch.optim as optim
